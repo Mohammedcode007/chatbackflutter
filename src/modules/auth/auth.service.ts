@@ -1,3 +1,5 @@
+
+
 // import { LoginPayload, RegisterPayload } from "./auth.types";
 // import { UserModel } from "../../models/User.model";
 
@@ -9,18 +11,22 @@
 //   return String(username || "").trim().toLowerCase();
 // }
 
+// function sanitizeUser(user: any) {
+//   const obj = user.toObject ? user.toObject() : user;
+
+//   const { password, __v, ...safeUser } = obj;
+
+//   return {
+//     ...safeUser,
+//     mongoId: String(obj._id),
+//     _id: String(obj._id),
+//     createdAt: obj.createdAt,
+//     updatedAt: obj.updatedAt,
+//   };
+// }
+
 // export async function registerService(payload: RegisterPayload) {
 //   console.log("========== REGISTER START ==========");
-//   console.log("[REGISTER] Raw payload:", {
-//     handler: payload.handler,
-//     request_id: payload.request_id,
-//     username: payload.username,
-//     password_exists: Boolean(payload.password),
-//     session: payload.session,
-//     sdk: payload.sdk,
-//     ver: payload.ver,
-//     id: payload.id,
-//   });
 
 //   const username = normalizeUsername(payload.username);
 //   const password = String(payload.password || "").trim();
@@ -58,16 +64,19 @@
 //     };
 //   }
 
-//   console.log("[REGISTER] Checking existing username:", username);
-
 //   const exists = await UserModel.findOne({ username }).lean();
 
-//   console.log("[REGISTER] Exists result:", exists ? {
-//     _id: String(exists._id),
-//     userId: exists.userId,
-//     username: exists.username,
-//     createdAt: exists.createdAt,
-//   } : null);
+//   console.log(
+//     "[REGISTER] Exists result:",
+//     exists
+//       ? {
+//           _id: String(exists._id),
+//           userId: exists.userId,
+//           username: exists.username,
+//           createdAt: exists.createdAt,
+//         }
+//       : null
+//   );
 
 //   if (exists) {
 //     console.log("[REGISTER] Failed: username_already_exists");
@@ -80,28 +89,28 @@
 
 //   let userId = generatePublicUserId();
 
-//   console.log("[REGISTER] Generated userId:", userId);
-
 //   while (await UserModel.exists({ userId })) {
-//     console.log("[REGISTER] userId exists, generating new one:", userId);
 //     userId = generatePublicUserId();
 //   }
-
-//   console.log("[REGISTER] Final userId:", userId);
 
 //   try {
 //     const user = await UserModel.create({
 //       userId,
 //       username,
 //       password,
+
 //       photoUrl: "",
 //       current: "0",
+
 //       isManualOffline: false,
+
 //       privacy: {
 //         dmPrivacy: "open",
 //         friendRequestPrivacy: "open",
 //       },
+
 //       blockedUsers: [],
+
 //       features: {
 //         isVip: false,
 //         badge: null,
@@ -112,26 +121,19 @@
 //       },
 //     });
 
+//     const safeUser = sanitizeUser(user);
+
 //     console.log("[REGISTER] User created successfully:", {
-//       _id: String(user._id),
-//       userId: user.userId,
-//       username: user.username,
+//       _id: safeUser._id,
+//       userId: safeUser.userId,
+//       username: safeUser.username,
 //     });
 
 //     console.log("========== REGISTER END ==========");
 
 //     return {
 //       ok: true as const,
-//       user: {
-//         mongoId: String(user._id),
-//         userId: user.userId,
-//         username: user.username,
-//         photoUrl: user.photoUrl,
-//         current: user.current,
-//         isManualOffline: user.isManualOffline,
-//         privacy: user.privacy,
-//         features: user.features,
-//       },
+//       user: safeUser,
 //     };
 //   } catch (error: any) {
 //     console.log("[REGISTER] Mongo create error:", {
@@ -159,16 +161,6 @@
 
 // export async function loginService(payload: LoginPayload) {
 //   console.log("========== LOGIN START ==========");
-//   console.log("[LOGIN] Raw payload:", {
-//     handler: payload.handler,
-//     request_id: payload.request_id,
-//     username: payload.username,
-//     password_exists: Boolean(payload.password),
-//     session: payload.session,
-//     sdk: payload.sdk,
-//     ver: payload.ver,
-//     id: payload.id,
-//   });
 
 //   const username = normalizeUsername(payload.username);
 //   const password = String(payload.password || "").trim();
@@ -190,11 +182,16 @@
 
 //   const user = await UserModel.findOne({ username });
 
-//   console.log("[LOGIN] User found:", user ? {
-//     _id: String(user._id),
-//     userId: user.userId,
-//     username: user.username,
-//   } : null);
+//   console.log(
+//     "[LOGIN] User found:",
+//     user
+//       ? {
+//           _id: String(user._id),
+//           userId: user.userId,
+//           username: user.username,
+//         }
+//       : null
+//   );
 
 //   if (!user) {
 //     console.log("[LOGIN] Failed: user_not_found");
@@ -214,25 +211,32 @@
 //     };
 //   }
 
+//   if (!user.userId) {
+//     console.log("[LOGIN] Failed: user_missing_userId", {
+//       _id: String(user._id),
+//       username: user.username,
+//     });
+
+//     console.log("========== LOGIN END ==========");
+
+//     return {
+//       ok: false as const,
+//       reason: "user_missing_userId",
+//     };
+//   }
+
+//   const safeUser = sanitizeUser(user);
+
 //   console.log("[LOGIN] Login success:", {
-//     userId: user.userId,
-//     username: user.username,
+//     userId: safeUser.userId,
+//     username: safeUser.username,
 //   });
 
 //   console.log("========== LOGIN END ==========");
 
 //   return {
 //     ok: true as const,
-//     user: {
-//       mongoId: String(user._id),
-//       userId: user.userId,
-//       username: user.username,
-//       photoUrl: user.photoUrl,
-//       current: user.current,
-//       isManualOffline: user.isManualOffline,
-//       privacy: user.privacy,
-//       features: user.features,
-//     },
+//     user: safeUser,
 //   };
 // }
 
@@ -269,6 +273,30 @@ function sanitizeUser(user: any) {
   };
 }
 
+function getDuplicateReason(error: any) {
+  const field = Object.keys(error?.keyPattern || {})[0];
+
+  console.log("[REGISTER] Duplicate field:", field);
+
+  if (field === "username") {
+    return "username_already_exists";
+  }
+
+  if (field === "userId") {
+    return "user_id_already_exists";
+  }
+
+  if (field === "email") {
+    return "email_already_exists";
+  }
+
+  if (field === "atUsername") {
+    return "old_atUsername_index_error";
+  }
+
+  return `duplicate_${field || "unknown"}`;
+}
+
 export async function registerService(payload: RegisterPayload) {
   console.log("========== REGISTER START ==========");
 
@@ -284,6 +312,7 @@ export async function registerService(payload: RegisterPayload) {
   if (!username || !password) {
     console.log("[REGISTER] Failed: missing_username_or_password");
     console.log("========== REGISTER END ==========");
+
     return {
       ok: false as const,
       reason: "missing_username_or_password",
@@ -293,6 +322,7 @@ export async function registerService(payload: RegisterPayload) {
   if (username.length < 3) {
     console.log("[REGISTER] Failed: username_too_short");
     console.log("========== REGISTER END ==========");
+
     return {
       ok: false as const,
       reason: "username_too_short",
@@ -302,6 +332,7 @@ export async function registerService(payload: RegisterPayload) {
   if (password.length < 6) {
     console.log("[REGISTER] Failed: password_too_short");
     console.log("========== REGISTER END ==========");
+
     return {
       ok: false as const,
       reason: "password_too_short",
@@ -325,6 +356,7 @@ export async function registerService(payload: RegisterPayload) {
   if (exists) {
     console.log("[REGISTER] Failed: username_already_exists");
     console.log("========== REGISTER END ==========");
+
     return {
       ok: false as const,
       reason: "username_already_exists",
@@ -344,13 +376,29 @@ export async function registerService(payload: RegisterPayload) {
       password,
 
       photoUrl: "",
+      photoPublicId: "",
+
+      coverUrl: "",
+      coverPublicId: "",
+
       current: "0",
+      statusMessage: "",
+
+      email: "",
+      birthdate: "",
+      country: "",
+      gender: "",
+
+      privateLock: false,
+      autoJoinStream: false,
+      hideActivityStatus: false,
 
       isManualOffline: false,
 
       privacy: {
         dmPrivacy: "open",
         friendRequestPrivacy: "open",
+        allowCalls: "all",
       },
 
       blockedUsers: [],
@@ -392,7 +440,7 @@ export async function registerService(payload: RegisterPayload) {
     if (error?.code === 11000) {
       return {
         ok: false as const,
-        reason: "username_already_exists",
+        reason: getDuplicateReason(error),
       };
     }
 
@@ -418,6 +466,7 @@ export async function loginService(payload: LoginPayload) {
   if (!username || !password) {
     console.log("[LOGIN] Failed: missing_username_or_password");
     console.log("========== LOGIN END ==========");
+
     return {
       ok: false as const,
       reason: "missing_username_or_password",
@@ -440,6 +489,7 @@ export async function loginService(payload: LoginPayload) {
   if (!user) {
     console.log("[LOGIN] Failed: user_not_found");
     console.log("========== LOGIN END ==========");
+
     return {
       ok: false as const,
       reason: "user_not_found",
@@ -449,6 +499,7 @@ export async function loginService(payload: LoginPayload) {
   if (user.password !== password) {
     console.log("[LOGIN] Failed: wrong_password");
     console.log("========== LOGIN END ==========");
+
     return {
       ok: false as const,
       reason: "wrong_password",

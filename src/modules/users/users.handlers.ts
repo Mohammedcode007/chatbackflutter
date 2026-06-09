@@ -5,7 +5,11 @@ import { WS_EVENTS, WS_HANDLERS } from "../../websocket/ws.events";
 import { UserModel } from "../../models/User.model";
 import { deliverPendingPrivateMessages } from "../chats/chats.delivery";
 import { updateUserProfileService } from "./users.service";
-
+import {
+  deleteMyAccountService,
+  updateUserProfileImageService,
+} from "./users.service";
+import { updateClient } from "../../websocket/stores/clients.store";
 const handleUpdateProfile: WsHandler = async (context) => {
   if (!requireLogin(context, WS_EVENTS.USER_PROFILE_EVENT)) return;
 
@@ -160,9 +164,118 @@ const handleUnblockUser: WsHandler = async (context) => {
     blocked: false,
   });
 };
+const handleUpdateProfileImage: WsHandler = async (context) => {
+  if (!requireLogin(context, WS_EVENTS.USER_PROFILE_IMAGE_EVENT)) return;
 
+  const userId = context.client!.userId!;
+
+  const imageType = String(context.message.image_type || "").trim();
+  const base64 = String(context.message.base64 || "").trim();
+
+  if (!["avatar", "cover"].includes(imageType)) {
+    sendError(
+      context.socket,
+      WS_EVENTS.USER_PROFILE_IMAGE_EVENT,
+      "invalid_image_type",
+      context.message.request_id
+    );
+    return;
+  }
+
+  if (!base64) {
+    sendError(
+      context.socket,
+      WS_EVENTS.USER_PROFILE_IMAGE_EVENT,
+      "missing_base64",
+      context.message.request_id
+    );
+    return;
+  }
+
+  const result = await updateUserProfileImageService({
+    userId,
+    imageType: imageType as "avatar" | "cover",
+    base64,
+  });
+
+  if (!result.ok) {
+    sendError(
+      context.socket,
+      WS_EVENTS.USER_PROFILE_IMAGE_EVENT,
+      result.reason,
+      context.message.request_id
+    );
+    return;
+  }
+
+  sendSuccess(context.socket, {
+    handler: WS_EVENTS.USER_PROFILE_IMAGE_EVENT,
+    request_id: context.message.request_id,
+
+    image_type: result.imageType,
+    url: result.url,
+
+    user_id: result.user.userId,
+    username: result.user.username,
+    photo_url: result.user.photoUrl || "",
+    cover_url: result.user.coverUrl || "",
+
+    user: result.user,
+  });
+};
+
+const handleDeleteMyAccount: WsHandler = async (context) => {
+  if (!requireLogin(context, WS_EVENTS.USER_DELETE_ACCOUNT_EVENT)) return;
+
+  const userId = context.client!.userId!;
+
+  const confirm = String(context.message.confirm || "").trim();
+
+  if (confirm !== "DELETE_MY_ACCOUNT") {
+    sendError(
+      context.socket,
+      WS_EVENTS.USER_DELETE_ACCOUNT_EVENT,
+      "invalid_delete_confirm",
+      context.message.request_id
+    );
+    return;
+  }
+
+  const result = await deleteMyAccountService({
+    userId,
+  });
+
+  if (!result.ok) {
+    sendError(
+      context.socket,
+      WS_EVENTS.USER_DELETE_ACCOUNT_EVENT,
+      result.reason,
+      context.message.request_id
+    );
+    return;
+  }
+
+  updateClient(context.socket, {
+    mongoId: undefined,
+    userId: undefined,
+    username: undefined,
+    photoUrl: undefined,
+    session: undefined,
+    isLoggedIn: false,
+    activeRoomId: undefined,
+    activeChatId: undefined,
+  });
+
+  sendSuccess(context.socket, {
+    handler: WS_EVENTS.USER_DELETE_ACCOUNT_EVENT,
+    request_id: context.message.request_id,
+    deleted: true,
+  });
+};
 export const usersHandlers = {
   [WS_HANDLERS.USERS_PROFILE_UPDATE]: handleUpdateProfile,
+  [WS_HANDLERS.USERS_PROFILE_IMAGE_UPDATE]: handleUpdateProfileImage,
+  [WS_HANDLERS.USERS_DELETE_ACCOUNT]: handleDeleteMyAccount,
 
   [WS_HANDLERS.USERS_SETTINGS_UPDATE]: handleUpdateSettings,
 

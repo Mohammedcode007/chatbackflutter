@@ -1,12 +1,11 @@
+import "dotenv/config";
+
 import http from "http";
-import dotenv from "dotenv";
 
 import { createApp } from "./app";
 import { initWebSocketServer } from "./websocket/ws.server";
 import { connectDatabase } from "./database/db";
 import { env } from "./config/env";
-
-dotenv.config();
 
 async function bootstrap() {
   await connectDatabase();

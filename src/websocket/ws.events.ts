@@ -1,11 +1,15 @@
 export const WS_HANDLERS = {
   AUTH_LOGIN: "auth.login",
-  AUTH_LOGOUT: "auth.logout",
   AUTH_REGISTER: "auth.register",
+  AUTH_LOGOUT: "auth.logout",
+
   USERS_SETTINGS_UPDATE: "users.settings.update",
+  USERS_PROFILE_UPDATE: "users.profile.update",
+  USERS_PROFILE_IMAGE_UPDATE: "users.profile.image.update",
+  USERS_DELETE_ACCOUNT: "users.account.delete",
   USERS_BLOCK: "users.block",
   USERS_UNBLOCK: "users.unblock",
-USERS_PROFILE_UPDATE: "users.profile.update",
+
   FRIENDS_LIST: "friends.list",
   FRIENDS_REQUEST: "friends.request",
   FRIENDS_ACCEPT: "friends.accept",
@@ -43,11 +47,15 @@ export const WS_EVENTS = {
   CONNECTION_EVENT: "connection_event",
 
   LOGIN_EVENT: "login_event",
-  LOGOUT_EVENT: "logout_event",
   REGISTER_EVENT: "register_event",
+  LOGOUT_EVENT: "logout_event",
+
   USER_SETTINGS_EVENT: "user_settings_event",
+  USER_PROFILE_EVENT: "user_profile_event",
+  USER_PROFILE_IMAGE_EVENT: "user_profile_image_event",
+  USER_DELETE_ACCOUNT_EVENT: "user_delete_account_event",
   USER_BLOCK_EVENT: "user_block_event",
-USER_PROFILE_EVENT: "user_profile_event",
+
   FRIENDS_LIST_EVENT: "friends_list_event",
   FRIEND_REQUEST_EVENT: "friend_request_event",
   FRIEND_ACCEPT_EVENT: "friend_accept_event",

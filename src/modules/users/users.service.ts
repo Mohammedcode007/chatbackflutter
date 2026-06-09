@@ -1,5 +1,8 @@
 import { UserModel } from "../../models/User.model";
-
+import {
+  deleteCloudinaryFile,
+  uploadBase64ToCloudinary,
+} from "../media/cloudinary.service";
 function sanitizeUser(user: any) {
   const obj = user.toObject ? user.toObject() : user;
 
@@ -234,5 +237,108 @@ export async function updateUserProfileService(input: {
   return {
     ok: true as const,
     user: sanitizeUser(user),
+  };
+}
+
+
+export async function updateUserProfileImageService(input: {
+  userId: string;
+  imageType: "avatar" | "cover";
+  base64: string;
+}) {
+  const { userId, imageType, base64 } = input;
+
+  const user = await UserModel.findOne({ userId });
+
+  if (!user) {
+    return {
+      ok: false as const,
+      reason: "user_not_found",
+    };
+  }
+
+  const oldUrl = imageType === "avatar" ? user.photoUrl : user.coverUrl;
+  const oldPublicId =
+    imageType === "avatar"
+      ? (user as any).photoPublicId
+      : (user as any).coverPublicId;
+
+  const upload = await uploadBase64ToCloudinary({
+    base64,
+    userId,
+    kind: imageType === "avatar" ? "profile_avatar" : "profile_cover",
+  });
+
+  if (!upload.ok) {
+    return upload;
+  }
+
+  /*
+    حذف القديم بعد نجاح رفع الجديد
+    حتى لا نخسر الصورة القديمة لو الرفع فشل
+  */
+  if (oldUrl || oldPublicId) {
+    await deleteCloudinaryFile({
+      url: oldUrl,
+      publicId: oldPublicId,
+      resourceType: "image",
+    });
+  }
+
+  if (imageType === "avatar") {
+    user.photoUrl = upload.url;
+    (user as any).photoPublicId = upload.publicId;
+  } else {
+    user.coverUrl = upload.url;
+    (user as any).coverPublicId = upload.publicId;
+  }
+
+  await user.save();
+
+  return {
+    ok: true as const,
+    user: sanitizeUser(user),
+    imageType,
+    url: upload.url,
+    publicId: upload.publicId,
+  };
+}
+
+export async function deleteMyAccountService(input: {
+  userId: string;
+}) {
+  const { userId } = input;
+
+  const user = await UserModel.findOne({ userId });
+
+  if (!user) {
+    return {
+      ok: false as const,
+      reason: "user_not_found",
+    };
+  }
+
+  /*
+    حذف صور المستخدم من Cloudinary
+  */
+  await deleteCloudinaryFile({
+    url: user.photoUrl,
+    publicId: (user as any).photoPublicId,
+    resourceType: "image",
+  });
+
+  await deleteCloudinaryFile({
+    url: user.coverUrl,
+    publicId: (user as any).coverPublicId,
+    resourceType: "image",
+  });
+
+  /*
+    حذف الحساب نفسه
+  */
+  await UserModel.deleteOne({ userId });
+
+  return {
+    ok: true as const,
   };
 }

@@ -11,7 +11,10 @@ export type UserDocument = Document & {
   password: string;
 
   photoUrl: string;
+  photoPublicId: string;
+
   coverUrl: string;
+  coverPublicId: string;
 
   current: string;
   statusMessage: string;
@@ -76,7 +79,17 @@ const UserSchema = new Schema<UserDocument>(
       default: "",
     },
 
+    photoPublicId: {
+      type: String,
+      default: "",
+    },
+
     coverUrl: {
+      type: String,
+      default: "",
+    },
+
+    coverPublicId: {
       type: String,
       default: "",
     },
@@ -162,12 +175,35 @@ const UserSchema = new Schema<UserDocument>(
     ],
 
     features: {
-      isVip: { type: Boolean, default: false },
-      badge: { type: String, default: null },
-      level: { type: Number, default: 1 },
-      roomLimit: { type: Number, default: 5 },
-      canCreatePrivateRoom: { type: Boolean, default: false },
-      canUseSpecialEffects: { type: Boolean, default: false },
+      isVip: {
+        type: Boolean,
+        default: false,
+      },
+
+      badge: {
+        type: String,
+        default: null,
+      },
+
+      level: {
+        type: Number,
+        default: 1,
+      },
+
+      roomLimit: {
+        type: Number,
+        default: 5,
+      },
+
+      canCreatePrivateRoom: {
+        type: Boolean,
+        default: false,
+      },
+
+      canUseSpecialEffects: {
+        type: Boolean,
+        default: false,
+      },
     },
   },
   {
