@@ -2,9 +2,11 @@
   "name": "chatbackflutter",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "dist/server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js"
   },
   "repository": {
     "type": "git",
@@ -19,7 +21,10 @@
   "homepage": "https://github.com/Mohammedcode007/chatbackflutter#readme",
   "dependencies": {
     "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "ioredis": "^5.11.1",
+    "mongoose": "^9.6.3",
     "ws": "^8.21.0"
   },
   "devDependencies": {
