@@ -9,9 +9,11 @@ import { roomsHandlers } from "../modules/rooms/rooms.handlers";
 import { tweetsHandlers } from "../modules/tweets/tweets.handlers";
 import { notificationsHandlers } from "../modules/notifications/notifications.handlers";
 import { featuresHandlers } from "../modules/features/features.handlers";
-
+import { usersHandlers } from "../modules/users/users.handlers";
 const handlers: Record<string, WsHandler> = {
   ...authHandlers,
+    ...usersHandlers,
+
   ...friendsHandlers,
   ...chatsHandlers,
   ...roomsHandlers,

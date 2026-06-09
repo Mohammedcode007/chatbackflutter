@@ -4,61 +4,93 @@ import { sendError, sendSuccess } from "../../websocket/ws.utils";
 import { WS_EVENTS, WS_HANDLERS } from "../../websocket/ws.events";
 import { UserModel } from "../../models/User.model";
 import { deliverPendingPrivateMessages } from "../chats/chats.delivery";
+import { updateUserProfileService } from "./users.service";
 
-const handleUpdateSettings: WsHandler = async (context) => {
-  if (!requireLogin(context, WS_EVENTS.USER_SETTINGS_EVENT)) return;
+const handleUpdateProfile: WsHandler = async (context) => {
+  if (!requireLogin(context, WS_EVENTS.USER_PROFILE_EVENT)) return;
 
   const userId = context.client!.userId!;
 
-  const update: any = {};
+  const result = await updateUserProfileService({
+    userId,
+    payload: context.message,
+  });
 
-  if (typeof context.message.is_manual_offline === "boolean") {
-    update.isManualOffline = context.message.is_manual_offline;
-  }
-
-  if (
-    context.message.dm_privacy &&
-    ["open", "friends_only", "closed"].includes(context.message.dm_privacy)
-  ) {
-    update["privacy.dmPrivacy"] = context.message.dm_privacy;
-  }
-
-  if (
-    context.message.friend_request_privacy &&
-    ["open", "closed"].includes(context.message.friend_request_privacy)
-  ) {
-    update["privacy.friendRequestPrivacy"] =
-      context.message.friend_request_privacy;
-  }
-
-  if (Object.keys(update).length === 0) {
+  if (!result.ok) {
     sendError(
       context.socket,
-      WS_EVENTS.USER_SETTINGS_EVENT,
-      "no_valid_settings",
+      WS_EVENTS.USER_PROFILE_EVENT,
+      result.reason,
       context.message.request_id
     );
     return;
   }
 
-  const user = await UserModel.findOneAndUpdate(
-    { userId },
-    { $set: update },
-    { new: true }
-  ).lean();
+  sendSuccess(context.socket, {
+    handler: WS_EVENTS.USER_PROFILE_EVENT,
+    request_id: context.message.request_id,
+
+    user_id: result.user.userId,
+    username: result.user.username,
+    photo_url: result.user.photoUrl || "",
+    current: result.user.current || "0",
+
+    user: result.user,
+  });
+
+  /*
+    لو المستخدم كان مخفي النشاط ثم رجعه false
+    نسلم الرسائل المؤجلة.
+  */
+  if (
+    context.message.hide_activity_status === false ||
+    context.message.hideActivityStatus === false
+  ) {
+    await deliverPendingPrivateMessages(userId);
+  }
+};
+
+/*
+  هذا القديم نتركه لو Flutter يستخدم users.settings.update
+  لكنه الآن يستدعي نفس دالة التحديث الجديدة.
+*/
+const handleUpdateSettings: WsHandler = async (context) => {
+  if (!requireLogin(context, WS_EVENTS.USER_SETTINGS_EVENT)) return;
+
+  const userId = context.client!.userId!;
+
+  const result = await updateUserProfileService({
+    userId,
+    payload: context.message,
+  });
+
+  if (!result.ok) {
+    sendError(
+      context.socket,
+      WS_EVENTS.USER_SETTINGS_EVENT,
+      result.reason,
+      context.message.request_id
+    );
+    return;
+  }
 
   sendSuccess(context.socket, {
     handler: WS_EVENTS.USER_SETTINGS_EVENT,
     request_id: context.message.request_id,
-    is_manual_offline: user?.isManualOffline,
-    privacy: user?.privacy,
+
+    user_id: result.user.userId,
+    username: result.user.username,
+    photo_url: result.user.photoUrl || "",
+    current: result.user.current || "0",
+
+    user: result.user,
   });
 
-  /**
-   * لو المستخدم غيّر حالته من manual offline إلى online،
-   * نسلّم الرسائل المؤجلة فورًا.
-   */
-  if (context.message.is_manual_offline === false) {
+  if (
+    context.message.is_manual_offline === false ||
+    context.message.hide_activity_status === false ||
+    context.message.hideActivityStatus === false
+  ) {
     await deliverPendingPrivateMessages(userId);
   }
 };
@@ -130,7 +162,10 @@ const handleUnblockUser: WsHandler = async (context) => {
 };
 
 export const usersHandlers = {
+  [WS_HANDLERS.USERS_PROFILE_UPDATE]: handleUpdateProfile,
+
   [WS_HANDLERS.USERS_SETTINGS_UPDATE]: handleUpdateSettings,
+
   [WS_HANDLERS.USERS_BLOCK]: handleBlockUser,
   [WS_HANDLERS.USERS_UNBLOCK]: handleUnblockUser,
 };

@@ -2,19 +2,35 @@ import mongoose, { Schema, Document } from "mongoose";
 
 export type DmPrivacy = "open" | "friends_only" | "closed";
 export type FriendRequestPrivacy = "open" | "closed";
+export type AllowCalls = "all" | "friends_only" | "none";
+export type Gender = "male" | "female" | "other" | "";
 
 export type UserDocument = Document & {
   userId: string;
   username: string;
   password: string;
+
   photoUrl: string;
+  coverUrl: string;
+
   current: string;
+  statusMessage: string;
+
+  email: string;
+  birthdate: string;
+  country: string;
+  gender: Gender;
+
+  privateLock: boolean;
+  autoJoinStream: boolean;
+  hideActivityStatus: boolean;
 
   isManualOffline: boolean;
 
   privacy: {
     dmPrivacy: DmPrivacy;
     friendRequestPrivacy: FriendRequestPrivacy;
+    allowCalls: AllowCalls;
   };
 
   blockedUsers: string[];
@@ -47,6 +63,7 @@ const UserSchema = new Schema<UserDocument>(
       unique: true,
       index: true,
       trim: true,
+      lowercase: true,
     },
 
     password: {
@@ -59,9 +76,57 @@ const UserSchema = new Schema<UserDocument>(
       default: "",
     },
 
+    coverUrl: {
+      type: String,
+      default: "",
+    },
+
     current: {
       type: String,
       default: "0",
+    },
+
+    statusMessage: {
+      type: String,
+      default: "",
+    },
+
+    email: {
+      type: String,
+      default: "",
+      trim: true,
+      lowercase: true,
+    },
+
+    birthdate: {
+      type: String,
+      default: "",
+    },
+
+    country: {
+      type: String,
+      default: "",
+    },
+
+    gender: {
+      type: String,
+      enum: ["male", "female", "other", ""],
+      default: "",
+    },
+
+    privateLock: {
+      type: Boolean,
+      default: false,
+    },
+
+    autoJoinStream: {
+      type: Boolean,
+      default: false,
+    },
+
+    hideActivityStatus: {
+      type: Boolean,
+      default: false,
     },
 
     isManualOffline: {
@@ -80,6 +145,12 @@ const UserSchema = new Schema<UserDocument>(
         type: String,
         enum: ["open", "closed"],
         default: "open",
+      },
+
+      allowCalls: {
+        type: String,
+        enum: ["all", "friends_only", "none"],
+        default: "all",
       },
     },
 

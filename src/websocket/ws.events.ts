@@ -1,11 +1,11 @@
 export const WS_HANDLERS = {
   AUTH_LOGIN: "auth.login",
   AUTH_LOGOUT: "auth.logout",
-AUTH_REGISTER: "auth.register",
+  AUTH_REGISTER: "auth.register",
   USERS_SETTINGS_UPDATE: "users.settings.update",
   USERS_BLOCK: "users.block",
   USERS_UNBLOCK: "users.unblock",
-
+USERS_PROFILE_UPDATE: "users.profile.update",
   FRIENDS_LIST: "friends.list",
   FRIENDS_REQUEST: "friends.request",
   FRIENDS_ACCEPT: "friends.accept",
@@ -44,10 +44,10 @@ export const WS_EVENTS = {
 
   LOGIN_EVENT: "login_event",
   LOGOUT_EVENT: "logout_event",
-REGISTER_EVENT: "register_event",
+  REGISTER_EVENT: "register_event",
   USER_SETTINGS_EVENT: "user_settings_event",
   USER_BLOCK_EVENT: "user_block_event",
-
+USER_PROFILE_EVENT: "user_profile_event",
   FRIENDS_LIST_EVENT: "friends_list_event",
   FRIEND_REQUEST_EVENT: "friend_request_event",
   FRIEND_ACCEPT_EVENT: "friend_accept_event",

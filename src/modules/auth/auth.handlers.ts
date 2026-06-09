@@ -8,12 +8,16 @@ import { isLoginPayload, isRegisterPayload } from "./auth.validators";
 import { loginService, logoutService, registerService } from "./auth.service";
 import { deliverPendingPrivateMessages } from "../chats/chats.delivery";
 
-const saveLoggedInClient = (context: Parameters<WsHandler>[0], user: any, session: string) => {
+const saveLoggedInClient = (
+  context: Parameters<WsHandler>[0],
+  user: any,
+  session: string
+) => {
   updateClient(context.socket, {
-    mongoId: user.mongoId,
+    mongoId: user.mongoId || String(user._id),
     userId: user.userId,
     username: user.username,
-    photoUrl: user.photoUrl,
+    photoUrl: user.photoUrl || "",
     session,
     isLoggedIn: true,
   });
@@ -30,12 +34,10 @@ const sendAuthSuccess = (
 
     user_id: user.userId,
     username: user.username,
-    photo_url: user.photoUrl,
-    current: user.current,
+    photo_url: user.photoUrl || "",
+    current: user.current || "0",
 
-    is_manual_offline: user.isManualOffline,
-    privacy: user.privacy,
-    features: user.features,
+    user,
   });
 };
 
