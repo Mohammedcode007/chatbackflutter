@@ -1,23 +1,41 @@
 import mongoose, { Schema, Document } from "mongoose";
 
-export type FriendshipDocument = Document & {
-  userA: string;
-  userB: string;
+export type FriendRequestStatus = "pending" | "accepted" | "rejected";
+
+export type FriendRequestDocument = Document & {
+  requestId: string;
+  fromUserId: string;
+  toUserId: string;
+  status: FriendRequestStatus;
   createdAt: Date;
   updatedAt: Date;
 };
 
-const FriendshipSchema = new Schema<FriendshipDocument>(
+const FriendRequestSchema = new Schema<FriendRequestDocument>(
   {
-    userA: {
+    requestId: {
+      type: String,
+      required: true,
+      unique: true,
+      index: true,
+    },
+
+    fromUserId: {
       type: String,
       required: true,
       index: true,
     },
 
-    userB: {
+    toUserId: {
       type: String,
       required: true,
+      index: true,
+    },
+
+    status: {
+      type: String,
+      enum: ["pending", "accepted", "rejected"],
+      default: "pending",
       index: true,
     },
   },
@@ -26,9 +44,18 @@ const FriendshipSchema = new Schema<FriendshipDocument>(
   }
 );
 
-FriendshipSchema.index({ userA: 1, userB: 1 }, { unique: true });
+FriendRequestSchema.index(
+  {
+    fromUserId: 1,
+    toUserId: 1,
+    status: 1,
+  },
+  {
+    unique: false,
+  }
+);
 
-export const FriendshipModel = mongoose.model<FriendshipDocument>(
-  "Friendship",
-  FriendshipSchema
+export const FriendRequestModel = mongoose.model<FriendRequestDocument>(
+  "FriendRequest",
+  FriendRequestSchema
 );

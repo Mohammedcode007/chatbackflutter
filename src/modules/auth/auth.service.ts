@@ -370,48 +370,60 @@ export async function registerService(payload: RegisterPayload) {
   }
 
   try {
-    const user = await UserModel.create({
-      userId,
-      username,
-      password,
+  const user = await UserModel.create({
+  userId,
+  username,
+  password,
 
-      photoUrl: "",
-      photoPublicId: "",
+  points: 100,
 
-      coverUrl: "",
-      coverPublicId: "",
+  photoUrl: "",
+  photoPublicId: "",
 
-      current: "0",
-      statusMessage: "",
+  coverUrl: "",
+  coverPublicId: "",
 
-      email: "",
-      birthdate: "",
-      country: "",
-      gender: "",
+  accountColor: "#2BCB00",
 
-      privateLock: false,
-      autoJoinStream: false,
-      hideActivityStatus: false,
+  badgeKey: "",
+  badgeName: "",
+  badgeValue: "",
 
-      isManualOffline: false,
+  verificationType: "none",
 
-      privacy: {
-        dmPrivacy: "open",
-        friendRequestPrivacy: "open",
-        allowCalls: "all",
-      },
+  inventory: [],
 
-      blockedUsers: [],
+  current: "0",
+  statusMessage: "",
 
-      features: {
-        isVip: false,
-        badge: null,
-        level: 1,
-        roomLimit: 5,
-        canCreatePrivateRoom: false,
-        canUseSpecialEffects: false,
-      },
-    });
+  email: "",
+  birthdate: "",
+  country: "",
+  gender: "",
+
+  privateLock: false,
+  autoJoinStream: false,
+  hideActivityStatus: false,
+
+  isManualOffline: false,
+
+  privacy: {
+    dmPrivacy: "open",
+    friendRequestPrivacy: "open",
+    allowCalls: "all",
+  },
+
+  blockedUsers: [],
+
+  features: {
+    isVip: false,
+    badge: null,
+    level: 1,
+    roomLimit: 5,
+    canCreatePrivateRoom: false,
+    canUseSpecialEffects: false,
+  },
+});
 
     const safeUser = sanitizeUser(user);
 

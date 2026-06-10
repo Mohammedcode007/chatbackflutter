@@ -3,6 +3,7 @@ import mongoose, { Schema, Document } from "mongoose";
 export type FriendRequestStatus = "pending" | "accepted" | "rejected";
 
 export type FriendRequestDocument = Document & {
+  requestId: string;
   fromUserId: string;
   toUserId: string;
   status: FriendRequestStatus;
@@ -12,6 +13,13 @@ export type FriendRequestDocument = Document & {
 
 const FriendRequestSchema = new Schema<FriendRequestDocument>(
   {
+    requestId: {
+      type: String,
+      required: true,
+      unique: true,
+      index: true,
+    },
+
     fromUserId: {
       type: String,
       required: true,
@@ -36,12 +44,15 @@ const FriendRequestSchema = new Schema<FriendRequestDocument>(
   }
 );
 
-FriendRequestSchema.index(
-  { fromUserId: 1, toUserId: 1, status: 1 },
-  { unique: false }
-);
+FriendRequestSchema.index({
+  fromUserId: 1,
+  toUserId: 1,
+  status: 1,
+});
 
-export const FriendRequestModel = mongoose.model<FriendRequestDocument>(
-  "FriendRequest",
-  FriendRequestSchema
-);
+export const FriendRequestModel =
+  (mongoose.models.FriendRequest as mongoose.Model<FriendRequestDocument>) ||
+  mongoose.model<FriendRequestDocument>(
+    "FriendRequest",
+    FriendRequestSchema
+  );

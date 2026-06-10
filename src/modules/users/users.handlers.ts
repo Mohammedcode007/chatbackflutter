@@ -4,12 +4,40 @@ import { sendError, sendSuccess } from "../../websocket/ws.utils";
 import { WS_EVENTS, WS_HANDLERS } from "../../websocket/ws.events";
 import { UserModel } from "../../models/User.model";
 import { deliverPendingPrivateMessages } from "../chats/chats.delivery";
-import { updateUserProfileService } from "./users.service";
+import { updateClient } from "../../websocket/stores/clients.store";
+
 import {
   deleteMyAccountService,
+  getFullUserProfileService,
+  respondFriendRequestService,
+  searchUsersService,
+  sendFriendRequestService,
   updateUserProfileImageService,
+  updateUserProfileService,
 } from "./users.service";
-import { updateClient } from "../../websocket/stores/clients.store";
+
+const sendToUserIfOnline = (
+  context: Parameters<WsHandler>[0],
+  userId: string,
+  payload: any
+) => {
+  /*
+    لو عندك دالة إرسال لمستخدم أونلاين باسم مختلف،
+    عدّل هذا الجزء فقط.
+  */
+  const anyContext = context as any;
+
+  if (typeof anyContext.broadcastToUser === "function") {
+    anyContext.broadcastToUser(userId, payload);
+    return;
+  }
+
+  if (typeof anyContext.sendToUser === "function") {
+    anyContext.sendToUser(userId, payload);
+    return;
+  }
+};
+
 const handleUpdateProfile: WsHandler = async (context) => {
   if (!requireLogin(context, WS_EVENTS.USER_PROFILE_EVENT)) return;
 
@@ -42,10 +70,6 @@ const handleUpdateProfile: WsHandler = async (context) => {
     user: result.user,
   });
 
-  /*
-    لو المستخدم كان مخفي النشاط ثم رجعه false
-    نسلم الرسائل المؤجلة.
-  */
   if (
     context.message.hide_activity_status === false ||
     context.message.hideActivityStatus === false
@@ -54,10 +78,6 @@ const handleUpdateProfile: WsHandler = async (context) => {
   }
 };
 
-/*
-  هذا القديم نتركه لو Flutter يستخدم users.settings.update
-  لكنه الآن يستدعي نفس دالة التحديث الجديدة.
-*/
 const handleUpdateSettings: WsHandler = async (context) => {
   if (!requireLogin(context, WS_EVENTS.USER_SETTINGS_EVENT)) return;
 
@@ -164,6 +184,7 @@ const handleUnblockUser: WsHandler = async (context) => {
     blocked: false,
   });
 };
+
 const handleUpdateProfileImage: WsHandler = async (context) => {
   if (!requireLogin(context, WS_EVENTS.USER_PROFILE_IMAGE_EVENT)) return;
 
@@ -228,7 +249,6 @@ const handleDeleteMyAccount: WsHandler = async (context) => {
   if (!requireLogin(context, WS_EVENTS.USER_DELETE_ACCOUNT_EVENT)) return;
 
   const userId = context.client!.userId!;
-
   const confirm = String(context.message.confirm || "").trim();
 
   if (confirm !== "DELETE_MY_ACCOUNT") {
@@ -272,6 +292,206 @@ const handleDeleteMyAccount: WsHandler = async (context) => {
     deleted: true,
   });
 };
+
+const handleGetUserProfile: WsHandler = async (context) => {
+  if (!requireLogin(context, WS_EVENTS.USER_PROFILE_GET_EVENT)) return;
+
+  const viewerUserId = context.client!.userId!;
+
+  const targetUserId = String(
+    context.message.target_user_id ||
+      context.message.targetUserId ||
+      context.message.user_id ||
+      ""
+  ).trim();
+
+  if (!targetUserId) {
+    sendError(
+      context.socket,
+      WS_EVENTS.USER_PROFILE_GET_EVENT,
+      "missing_target_user_id",
+      context.message.request_id
+    );
+    return;
+  }
+
+  const result = await getFullUserProfileService({
+    viewerUserId,
+    targetUserId,
+  });
+
+  if (!result.ok) {
+    sendError(
+      context.socket,
+      WS_EVENTS.USER_PROFILE_GET_EVENT,
+      result.reason,
+      context.message.request_id
+    );
+    return;
+  }
+
+  sendSuccess(context.socket, {
+    handler: WS_EVENTS.USER_PROFILE_GET_EVENT,
+    request_id: context.message.request_id,
+    profile: result.profile,
+  });
+};
+
+const handleSearchUsers: WsHandler = async (context) => {
+  if (!requireLogin(context, WS_EVENTS.USERS_SEARCH_EVENT)) return;
+
+  const viewerUserId = context.client!.userId!;
+  const query = String(context.message.query || "").trim();
+
+  const limit = Number(context.message.limit || 20);
+
+const result = await searchUsersService({
+  viewerUserId,
+  query,
+  limit,
+});
+
+sendSuccess(context.socket, {
+  handler: WS_EVENTS.USERS_SEARCH_EVENT,
+  request_id: context.message.request_id,
+  users: result.users,
+});
+};
+
+const handleSendFriendRequest: WsHandler = async (context) => {
+  if (!requireLogin(context, WS_EVENTS.FRIEND_REQUEST_SEND_EVENT)) return;
+
+  const fromUserId = context.client!.userId!;
+
+  const toUserId = String(
+    context.message.to_user_id ||
+      context.message.toUserId ||
+      context.message.target_user_id ||
+      context.message.targetUserId ||
+      ""
+  ).trim();
+
+  if (!toUserId) {
+    sendError(
+      context.socket,
+      WS_EVENTS.FRIEND_REQUEST_SEND_EVENT,
+      "missing_to_user_id",
+      context.message.request_id
+    );
+    return;
+  }
+
+  const result = await sendFriendRequestService({
+    fromUserId,
+    toUserId,
+  });
+
+  if (!result.ok) {
+    sendError(
+      context.socket,
+      WS_EVENTS.FRIEND_REQUEST_SEND_EVENT,
+      result.reason,
+      context.message.request_id
+    );
+    return;
+  }
+
+  /*
+    رد للمرسل
+  */
+  sendSuccess(context.socket, {
+    handler: WS_EVENTS.FRIEND_REQUEST_SEND_EVENT,
+    request_id: context.message.request_id,
+    request: result.request,
+    toUser: result.toUser,
+  });
+
+  /*
+    إشعار فوري للمستقبل لو أونلاين
+  */
+  sendToUserIfOnline(context, toUserId, {
+    handler: WS_EVENTS.FRIEND_REQUEST_SEND_EVENT,
+    type: "incoming",
+    request: result.request,
+    fromUser: result.fromUser,
+  });
+};
+
+const handleRespondFriendRequest: WsHandler = async (context) => {
+  if (!requireLogin(context, WS_EVENTS.FRIEND_REQUEST_RESPOND_EVENT)) return;
+
+  const userId = context.client!.userId!;
+
+  const requestId = String(
+    context.message.request_id_value ||
+      context.message.friend_request_id ||
+      context.message.friendRequestId ||
+      ""
+  ).trim();
+
+  const action = String(context.message.action || "").trim();
+
+  if (!requestId) {
+    sendError(
+      context.socket,
+      WS_EVENTS.FRIEND_REQUEST_RESPOND_EVENT,
+      "missing_request_id",
+      context.message.request_id
+    );
+    return;
+  }
+
+  if (action !== "accept" && action !== "reject") {
+    sendError(
+      context.socket,
+      WS_EVENTS.FRIEND_REQUEST_RESPOND_EVENT,
+      "invalid_friend_request_action",
+      context.message.request_id
+    );
+    return;
+  }
+
+  const result = await respondFriendRequestService({
+    userId,
+    requestId,
+    action: action as "accept" | "reject",
+  });
+
+  if (!result.ok) {
+    sendError(
+      context.socket,
+      WS_EVENTS.FRIEND_REQUEST_RESPOND_EVENT,
+      result.reason,
+      context.message.request_id
+    );
+    return;
+  }
+
+  /*
+    رد للشخص الذي قبل/رفض
+  */
+  sendSuccess(context.socket, {
+    handler: WS_EVENTS.FRIEND_REQUEST_RESPOND_EVENT,
+    request_id: context.message.request_id,
+    action: result.action,
+    request: result.request,
+    fromUser: result.fromUser,
+    toUser: result.toUser,
+  });
+
+  /*
+    إشعار فوري للمرسل الأصلي
+  */
+  sendToUserIfOnline(context, result.request.fromUserId, {
+    handler: WS_EVENTS.FRIEND_REQUEST_RESPOND_EVENT,
+    type: "friend_request_updated",
+    action: result.action,
+    request: result.request,
+    fromUser: result.fromUser,
+    toUser: result.toUser,
+  });
+};
+
 export const usersHandlers = {
   [WS_HANDLERS.USERS_PROFILE_UPDATE]: handleUpdateProfile,
   [WS_HANDLERS.USERS_PROFILE_IMAGE_UPDATE]: handleUpdateProfileImage,
@@ -281,4 +501,10 @@ export const usersHandlers = {
 
   [WS_HANDLERS.USERS_BLOCK]: handleBlockUser,
   [WS_HANDLERS.USERS_UNBLOCK]: handleUnblockUser,
+
+  [WS_HANDLERS.USERS_PROFILE_GET]: handleGetUserProfile,
+  [WS_HANDLERS.USERS_SEARCH]: handleSearchUsers,
+
+  [WS_HANDLERS.FRIEND_REQUEST_SEND]: handleSendFriendRequest,
+  [WS_HANDLERS.FRIEND_REQUEST_RESPOND]: handleRespondFriendRequest,
 };

@@ -5,16 +5,57 @@ export type FriendRequestPrivacy = "open" | "closed";
 export type AllowCalls = "all" | "friends_only" | "none";
 export type Gender = "male" | "female" | "other" | "";
 
+export type VerificationType = "none" | "blue" | "gold" | "business";
+
+export type InventoryItemType =
+  | "account_color"
+  | "badge"
+  | "verification";
+
+export type UserInventoryItem = {
+  itemId: string;
+  type: InventoryItemType;
+  key: string;
+  name: string;
+  value: string;
+  purchasedAt: Date;
+  expiresAt?: Date | null;
+  isActive: boolean;
+};
+
+export type UserStats = {
+  friendsCount: number;
+  profileViewsCount: number;
+  giftsSentCount: number;
+  giftsReceivedCount: number;
+};
+
 export type UserDocument = Document & {
   userId: string;
   username: string;
   password: string;
+
+  points: number;
 
   photoUrl: string;
   photoPublicId: string;
 
   coverUrl: string;
   coverPublicId: string;
+
+  accountColor: string;
+
+  badgeKey: string;
+  badgeName: string;
+  badgeValue: string;
+
+  verificationType: VerificationType;
+
+  inventory: UserInventoryItem[];
+
+  friends: string[];
+
+  stats: UserStats;
 
   current: string;
   statusMessage: string;
@@ -51,6 +92,54 @@ export type UserDocument = Document & {
   updatedAt: Date;
 };
 
+const InventoryItemSchema = new Schema<UserInventoryItem>(
+  {
+    itemId: {
+      type: String,
+      required: true,
+    },
+
+    type: {
+      type: String,
+      enum: ["account_color", "badge", "verification"],
+      required: true,
+    },
+
+    key: {
+      type: String,
+      required: true,
+    },
+
+    name: {
+      type: String,
+      required: true,
+    },
+
+    value: {
+      type: String,
+      required: true,
+    },
+
+    purchasedAt: {
+      type: Date,
+      default: Date.now,
+    },
+
+    expiresAt: {
+      type: Date,
+      default: null,
+    },
+
+    isActive: {
+      type: Boolean,
+      default: false,
+    },
+  },
+  {
+    _id: false,
+  }
+);
+
 const UserSchema = new Schema<UserDocument>(
   {
     userId: {
@@ -74,6 +163,12 @@ const UserSchema = new Schema<UserDocument>(
       required: true,
     },
 
+    points: {
+      type: Number,
+      default: 100,
+      min: 0,
+    },
+
     photoUrl: {
       type: String,
       default: "",
@@ -92,6 +187,70 @@ const UserSchema = new Schema<UserDocument>(
     coverPublicId: {
       type: String,
       default: "",
+    },
+
+    accountColor: {
+      type: String,
+      default: "#2BCB00",
+    },
+
+    badgeKey: {
+      type: String,
+      default: "",
+    },
+
+    badgeName: {
+      type: String,
+      default: "",
+    },
+
+    badgeValue: {
+      type: String,
+      default: "",
+    },
+
+    verificationType: {
+      type: String,
+      enum: ["none", "blue", "gold", "business"],
+      default: "none",
+    },
+
+    inventory: {
+      type: [InventoryItemSchema],
+      default: [],
+    },
+
+    friends: [
+      {
+        type: String,
+        index: true,
+      },
+    ],
+
+    stats: {
+      friendsCount: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+
+      profileViewsCount: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+
+      giftsSentCount: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+
+      giftsReceivedCount: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
     },
 
     current: {

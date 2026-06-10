@@ -1,7 +1,7 @@
 import { WsHandler, WsHandlerContext } from "./ws.types";
 import { sendError } from "./ws.utils";
 import { WS_EVENTS, WS_HANDLERS } from "./ws.events";
-
+import { storeHandlers } from "../modules/store/store.handlers";
 import { authHandlers } from "../modules/auth/auth.handlers";
 import { friendsHandlers } from "../modules/friends/friends.handlers";
 import { chatsHandlers } from "../modules/chats/chats.handlers";
@@ -13,6 +13,7 @@ import { usersHandlers } from "../modules/users/users.handlers";
 const handlers: Record<string, WsHandler> = {
   ...authHandlers,
     ...usersHandlers,
+  ...storeHandlers,
 
   ...friendsHandlers,
   ...chatsHandlers,
