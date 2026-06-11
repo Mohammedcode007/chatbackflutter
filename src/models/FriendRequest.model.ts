@@ -51,7 +51,7 @@ FriendRequestSchema.index({
 });
 
 export const FriendRequestModel =
-  (mongoose.models.FriendRequest as mongoose.Model<FriendRequestDocument>) ||
+  mongoose.models.FriendRequest ||
   mongoose.model<FriendRequestDocument>(
     "FriendRequest",
     FriendRequestSchema

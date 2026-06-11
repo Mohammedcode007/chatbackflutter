@@ -134,3 +134,20 @@ export function getUserSockets(userId: string) {
 export function isUserOnline(userId: string) {
   return getUserSockets(userId).size > 0;
 }
+export function sendToUserIfOnline(userId: string, payload: any) {
+  const sockets = getUserSockets(userId);
+
+  if (sockets.size === 0) {
+    return false;
+  }
+
+  const text = JSON.stringify(payload);
+
+  for (const socket of sockets) {
+    if (socket.readyState === WebSocket.OPEN) {
+      socket.send(text);
+    }
+  }
+
+  return true;
+}

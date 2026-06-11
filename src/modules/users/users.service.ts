@@ -56,6 +56,11 @@ function calculateAge(birthdate?: string | null) {
 function publicUserCard(user: any) {
   const obj = user.toObject ? user.toObject() : user;
 
+  const hideActivityStatus = obj.hideActivityStatus === true;
+  const isManualOffline = obj.isManualOffline === true;
+
+  const isHidden = hideActivityStatus || isManualOffline;
+
   return {
     userId: obj.userId,
     username: obj.username,
@@ -69,10 +74,40 @@ function publicUserCard(user: any) {
     badgeName: obj.badgeName || "",
     badgeValue: obj.badgeValue || "",
 
+    badges: Array.isArray(obj.inventory)
+      ? obj.inventory
+          .filter((item: any) => {
+            return item.type === "badge" && item.isActive === true;
+          })
+          .map((item: any) => ({
+            itemId: item.itemId || "",
+            key: item.key || "",
+            name: item.name || "",
+            value: item.value || "",
+          }))
+      : obj.badgeValue
+      ? [
+          {
+            itemId: "",
+            key: obj.badgeKey || "",
+            name: obj.badgeName || "",
+            value: obj.badgeValue || "",
+          },
+        ]
+      : [],
+
     verificationType: obj.verificationType || "none",
 
     statusMessage: obj.statusMessage || "",
-    current: obj.current || "",
+
+    current: isHidden ? "0" : obj.current || "",
+
+    hideActivityStatus,
+    isManualOffline,
+
+    isOnline: isHidden
+      ? false
+      : obj.current === "1" || obj.current === "online",
 
     country: obj.country || "",
     gender: obj.gender || "",
@@ -80,6 +115,12 @@ function publicUserCard(user: any) {
     age: calculateAge(obj.birthdate),
 
     points: obj.points || 0,
+
+    privacy: {
+      dmPrivacy: obj.privacy?.dmPrivacy || "open",
+      friendRequestPrivacy: obj.privacy?.friendRequestPrivacy || "open",
+      allowCalls: obj.privacy?.allowCalls || "all",
+    },
 
     stats: {
       friendsCount: obj.stats?.friendsCount || 0,
@@ -340,10 +381,12 @@ export async function updateUserProfileService(input: {
 
   ensureUserStats(user);
 
-  return {
-    ok: true as const,
-    user: sanitizeUser(user),
-  };
+return {
+  ok: true as const,
+  user: sanitizeUser(user),
+  publicUser: publicUserCard(user),
+  changedFields: Object.keys(update),
+};
 }
 
 /*
@@ -574,6 +617,17 @@ export async function getFullUserProfileService(input: {
       ? viewer.friends.includes(targetUserId)
       : false;
 
+  const blockedByMe =
+    !!viewer && Array.isArray((viewer as any).blockedUsers)
+      ? (viewer as any).blockedUsers.includes(targetUserId)
+      : false;
+
+  const hasBlockedMe =
+    Array.isArray((target as any).blockedUsers)
+      ? (target as any).blockedUsers.includes(viewerUserId)
+      : false;
+
+  const isBlocked = blockedByMe || hasBlockedMe;
   const pendingRequest = await FriendRequestModel.findOne({
     status: "pending",
     $or: [
@@ -595,17 +649,19 @@ export async function getFullUserProfileService(input: {
 
       isSelf,
       isFriend,
-
+      isBlocked,
+      blockedByMe,
+      hasBlockedMe,
       hasPendingFriendRequest: !!pendingRequest,
 
       pendingFriendRequest: pendingRequest
         ? {
-            requestId: pendingRequest.requestId,
-            fromUserId: pendingRequest.fromUserId,
-            toUserId: pendingRequest.toUserId,
-            status: pendingRequest.status,
-            createdAt: pendingRequest.createdAt,
-          }
+          requestId: pendingRequest.requestId,
+          fromUserId: pendingRequest.fromUserId,
+          toUserId: pendingRequest.toUserId,
+          status: pendingRequest.status,
+          createdAt: pendingRequest.createdAt,
+        }
         : null,
 
       viewAdded,
@@ -633,6 +689,15 @@ export async function searchUsersService(input: {
     };
   }
 
+  const viewer = await UserModel.findOne({ userId: viewerUserId }).lean();
+
+  if (!viewer) {
+    return {
+      ok: false as const,
+      reason: "viewer_not_found",
+    };
+  }
+
   const limit = Math.min(Math.max(input.limit || 20, 1), 50);
 
   const safeRegex = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -648,13 +713,70 @@ export async function searchUsersService(input: {
   })
     .limit(limit)
     .select(
-      "userId username photoUrl coverUrl accountColor badgeKey badgeName badgeValue verificationType statusMessage current country gender birthdate stats createdAt updatedAt"
+      "userId username photoUrl coverUrl accountColor badgeKey badgeName badgeValue verificationType statusMessage current country gender birthdate stats blockedUsers createdAt updatedAt"
     )
     .lean();
 
+  const targetIds = users.map((u: any) => u.userId);
+
+  const viewerFriends = new Set(
+    Array.isArray((viewer as any).friends) ? (viewer as any).friends : []
+  );
+
+  const viewerBlockedUsers = new Set(
+    Array.isArray((viewer as any).blockedUsers)
+      ? (viewer as any).blockedUsers
+      : []
+  );
+
+  const pendingRequests = await FriendRequestModel.find({
+    status: "pending",
+    $or: [
+      {
+        fromUserId: viewerUserId,
+        toUserId: { $in: targetIds },
+      },
+      {
+        toUserId: viewerUserId,
+        fromUserId: { $in: targetIds },
+      },
+    ],
+  }).lean();
+
+  const pendingUserIds = new Set<string>();
+
+  for (const request of pendingRequests) {
+    if (request.fromUserId === viewerUserId) {
+      pendingUserIds.add(request.toUserId);
+    } else {
+      pendingUserIds.add(request.fromUserId);
+    }
+  }
+
   return {
     ok: true as const,
-    users: users.map(publicUserCard),
+    users: users.map((user: any) => {
+      const userBlockedMe = Array.isArray(user.blockedUsers)
+        ? user.blockedUsers.includes(viewerUserId)
+        : false;
+
+      const blockedByMe = viewerBlockedUsers.has(user.userId);
+      const hasBlockedMe = userBlockedMe;
+
+      const card = publicUserCard(user);
+
+      return {
+        ...card,
+
+        isFriend: viewerFriends.has(user.userId),
+
+        hasPendingFriendRequest: pendingUserIds.has(user.userId),
+
+        isBlocked: blockedByMe || hasBlockedMe,
+        blockedByMe,
+        hasBlockedMe,
+      };
+    }),
   };
 }
 
@@ -686,7 +808,32 @@ export async function sendFriendRequestService(input: {
 
   ensureUserStats(fromUser);
   ensureUserStats(toUser);
+  if (
+    Array.isArray(fromUser.blockedUsers) &&
+    fromUser.blockedUsers.includes(toUserId)
+  ) {
+    return {
+      ok: false as const,
+      reason: "you_blocked_this_user",
+    };
+  }
 
+  if (
+    Array.isArray(toUser.blockedUsers) &&
+    toUser.blockedUsers.includes(fromUserId)
+  ) {
+    return {
+      ok: false as const,
+      reason: "user_blocked_you",
+    };
+  }
+
+  if (toUser.privacy?.friendRequestPrivacy === "closed") {
+    return {
+      ok: false as const,
+      reason: "friend_requests_closed",
+    };
+  }
   if (fromUser.friends.includes(toUserId)) {
     return {
       ok: false as const,
@@ -736,7 +883,218 @@ export async function sendFriendRequestService(input: {
     toUser: publicUserCard(toUser),
   };
 }
+export async function getIncomingFriendRequestsService(input: {
+  userId: string;
+}) {
+  const { userId } = input;
 
+  const requests = await FriendRequestModel.find({
+    toUserId: userId,
+    status: "pending",
+  })
+    .sort({ createdAt: -1 })
+    .lean();
+
+  const fromUserIds = requests.map((r) => r.fromUserId);
+
+  const users = await UserModel.find({
+    userId: { $in: fromUserIds },
+  })
+    .select(
+      "userId username photoUrl coverUrl accountColor badgeKey badgeName badgeValue verificationType statusMessage current country gender birthdate stats createdAt updatedAt"
+    )
+    .lean();
+
+  const usersMap = new Map<string, any>();
+
+  for (const user of users) {
+    usersMap.set(user.userId, publicUserCard(user));
+  }
+
+  return {
+    ok: true as const,
+    requests: requests.map((request) => ({
+      requestId: request.requestId,
+      fromUserId: request.fromUserId,
+      toUserId: request.toUserId,
+      status: request.status,
+      createdAt: request.createdAt,
+      updatedAt: request.updatedAt,
+      fromUser: usersMap.get(request.fromUserId) || null,
+    })),
+  };
+}
+export async function getFriendsService(input: {
+  userId: string;
+}) {
+  const { userId } = input;
+
+  const user = await UserModel.findOne({ userId }).lean();
+
+  if (!user) {
+    return {
+      ok: false as const,
+      reason: "user_not_found",
+    };
+  }
+
+  const friendIds = Array.isArray((user as any).friends)
+    ? (user as any).friends
+    : [];
+
+  const friends = await UserModel.find({
+    userId: { $in: friendIds },
+  })
+    .select(
+      "userId username photoUrl coverUrl accountColor badgeKey badgeName badgeValue verificationType statusMessage current country gender birthdate stats createdAt updatedAt"
+    )
+    .lean();
+
+  return {
+    ok: true as const,
+    friends: friends.map((friend: any) => ({
+      ...publicUserCard(friend),
+      isFriend: true,
+      hasPendingFriendRequest: false,
+      isBlocked: false,
+      blockedByMe: false,
+      hasBlockedMe: false,
+    })),
+  };
+}
+export async function removeFriendService(input: {
+  userId: string;
+  friendUserId: string;
+}) {
+  const { userId, friendUserId } = input;
+
+  if (userId === friendUserId) {
+    return {
+      ok: false as const,
+      reason: "invalid_friend_user",
+    };
+  }
+
+  const user = await UserModel.findOne({ userId });
+  const friend = await UserModel.findOne({ userId: friendUserId });
+
+  if (!user || !friend) {
+    return {
+      ok: false as const,
+      reason: "user_not_found",
+    };
+  }
+
+  ensureUserStats(user);
+  ensureUserStats(friend);
+
+  user.friends = user.friends.filter((id) => id !== friendUserId);
+  friend.friends = friend.friends.filter((id) => id !== userId);
+
+  user.stats.friendsCount = user.friends.length;
+  friend.stats.friendsCount = friend.friends.length;
+
+  await user.save();
+  await friend.save();
+
+  await FriendRequestModel.updateMany(
+    {
+      status: "pending",
+      $or: [
+        {
+          fromUserId: userId,
+          toUserId: friendUserId,
+        },
+        {
+          fromUserId: friendUserId,
+          toUserId: userId,
+        },
+      ],
+    },
+    {
+      $set: {
+        status: "rejected",
+      },
+    }
+  );
+
+  return {
+    ok: true as const,
+    removedUserId: friendUserId,
+    user: publicUserCard(user),
+    friend: publicUserCard(friend),
+  };
+}
+export async function getBlockedUsersService(input: {
+  userId: string;
+}) {
+  const { userId } = input;
+
+  const user = await UserModel.findOne({ userId }).lean();
+
+  if (!user) {
+    return {
+      ok: false as const,
+      reason: "user_not_found",
+    };
+  }
+
+  const blockedIds = Array.isArray((user as any).blockedUsers)
+    ? (user as any).blockedUsers
+    : [];
+
+  const users = await UserModel.find({
+    userId: { $in: blockedIds },
+  })
+    .select(
+      "userId username photoUrl coverUrl accountColor badgeKey badgeName badgeValue verificationType statusMessage current country gender birthdate stats createdAt updatedAt"
+    )
+    .lean();
+
+  return {
+    ok: true as const,
+    blockedUsers: users.map((blockedUser: any) => ({
+      ...publicUserCard(blockedUser),
+      isBlocked: true,
+      blockedByMe: true,
+      hasBlockedMe: false,
+      isFriend: false,
+      hasPendingFriendRequest: false,
+    })),
+  };
+}
+
+export async function unblockUserService(input: {
+  userId: string;
+  targetUserId: string;
+}) {
+  const { userId, targetUserId } = input;
+
+  if (!targetUserId || userId === targetUserId) {
+    return {
+      ok: false as const,
+      reason: "invalid_target_user",
+    };
+  }
+
+  const user = await UserModel.findOne({ userId });
+
+  if (!user) {
+    return {
+      ok: false as const,
+      reason: "user_not_found",
+    };
+  }
+
+  user.blockedUsers = user.blockedUsers.filter((id) => id !== targetUserId);
+
+  await user.save();
+
+  return {
+    ok: true as const,
+    targetUserId,
+  };
+}
 /*
   Accept / reject friend request
 */

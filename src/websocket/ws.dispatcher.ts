@@ -10,9 +10,9 @@ import { tweetsHandlers } from "../modules/tweets/tweets.handlers";
 import { notificationsHandlers } from "../modules/notifications/notifications.handlers";
 import { featuresHandlers } from "../modules/features/features.handlers";
 import { usersHandlers } from "../modules/users/users.handlers";
+import { dmHandlers } from "../modules/dm/dm.handlers";
 const handlers: Record<string, WsHandler> = {
   ...authHandlers,
-    ...usersHandlers,
   ...storeHandlers,
 
   ...friendsHandlers,
@@ -21,6 +21,9 @@ const handlers: Record<string, WsHandler> = {
   ...tweetsHandlers,
   ...notificationsHandlers,
   ...featuresHandlers,
+  ...dmHandlers,
+
+  ...usersHandlers,
 };
 
 export async function dispatchWsMessage(context: WsHandlerContext) {
