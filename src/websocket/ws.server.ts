@@ -1,6 +1,6 @@
 import type { Server as HttpServer } from "http";
 import WebSocket, { WebSocketServer } from "ws";
-
+import { clearUserActiveDmChat } from "./stores/dmActiveChats.store";
 import {
   addClient,
   getAllClients,
@@ -14,6 +14,12 @@ import { parseWsMessage, safeSend, sendError } from "./ws.utils";
 import { WS_EVENTS } from "./ws.events";
 
 function cleanupSocket(socket: WebSocket) {
+  const client = getClient(socket);
+
+  if (client?.userId) {
+    clearUserActiveDmChat(client.userId);
+  }
+
   leaveAllSocketRooms(socket);
   removeClient(socket);
 }

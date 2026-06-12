@@ -712,9 +712,32 @@ export async function searchUsersService(input: {
     },
   })
     .limit(limit)
-    .select(
-      "userId username photoUrl coverUrl accountColor badgeKey badgeName badgeValue verificationType statusMessage current country gender birthdate stats blockedUsers createdAt updatedAt"
-    )
+  .select(
+  [
+    "userId",
+    "username",
+    "photoUrl",
+    "coverUrl",
+    "accountColor",
+    "badgeKey",
+    "badgeName",
+    "badgeValue",
+    "verificationType",
+    "statusMessage",
+    "current",
+    "hideActivityStatus",
+    "isManualOffline",
+    "country",
+    "gender",
+    "birthdate",
+    "stats",
+    "blockedUsers",
+    "friends",
+    "privacy",
+    "createdAt",
+    "updatedAt",
+  ].join(" ")
+)
     .lean();
 
   const targetIds = users.map((u: any) => u.userId);
@@ -900,9 +923,32 @@ export async function getIncomingFriendRequestsService(input: {
   const users = await UserModel.find({
     userId: { $in: fromUserIds },
   })
-    .select(
-      "userId username photoUrl coverUrl accountColor badgeKey badgeName badgeValue verificationType statusMessage current country gender birthdate stats createdAt updatedAt"
-    )
+ .select(
+  [
+    "userId",
+    "username",
+    "photoUrl",
+    "coverUrl",
+    "accountColor",
+    "badgeKey",
+    "badgeName",
+    "badgeValue",
+    "verificationType",
+    "statusMessage",
+    "current",
+    "hideActivityStatus",
+    "isManualOffline",
+    "country",
+    "gender",
+    "birthdate",
+    "stats",
+    "blockedUsers",
+    "friends",
+    "privacy",
+    "createdAt",
+    "updatedAt",
+  ].join(" ")
+)
     .lean();
 
   const usersMap = new Map<string, any>();
@@ -942,24 +988,62 @@ export async function getFriendsService(input: {
     ? (user as any).friends
     : [];
 
+  const myBlockedUsers = Array.isArray((user as any).blockedUsers)
+    ? (user as any).blockedUsers
+    : [];
+
   const friends = await UserModel.find({
     userId: { $in: friendIds },
   })
     .select(
-      "userId username photoUrl coverUrl accountColor badgeKey badgeName badgeValue verificationType statusMessage current country gender birthdate stats createdAt updatedAt"
+      [
+        "userId",
+        "username",
+        "photoUrl",
+        "coverUrl",
+        "accountColor",
+        "badgeKey",
+        "badgeName",
+        "badgeValue",
+        "verificationType",
+        "statusMessage",
+        "current",
+        "hideActivityStatus",
+        "isManualOffline",
+        "country",
+        "gender",
+        "birthdate",
+        "stats",
+        "blockedUsers",
+        "friends",
+        "privacy",
+        "createdAt",
+        "updatedAt",
+      ].join(" ")
     )
     .lean();
 
   return {
     ok: true as const,
-    friends: friends.map((friend: any) => ({
-      ...publicUserCard(friend),
-      isFriend: true,
-      hasPendingFriendRequest: false,
-      isBlocked: false,
-      blockedByMe: false,
-      hasBlockedMe: false,
-    })),
+    friends: friends.map((friend: any) => {
+      const blockedByMe = myBlockedUsers.includes(friend.userId);
+
+      const hasBlockedMe = Array.isArray(friend.blockedUsers)
+        ? friend.blockedUsers.includes(userId)
+        : false;
+
+      return {
+        ...publicUserCard(friend),
+
+        isFriend: true,
+
+        hasPendingFriendRequest: false,
+
+        isBlocked: blockedByMe || hasBlockedMe,
+        blockedByMe,
+        hasBlockedMe,
+      };
+    }),
   };
 }
 export async function removeFriendService(input: {
@@ -1046,9 +1130,32 @@ export async function getBlockedUsersService(input: {
   const users = await UserModel.find({
     userId: { $in: blockedIds },
   })
-    .select(
-      "userId username photoUrl coverUrl accountColor badgeKey badgeName badgeValue verificationType statusMessage current country gender birthdate stats createdAt updatedAt"
-    )
+ .select(
+  [
+    "userId",
+    "username",
+    "photoUrl",
+    "coverUrl",
+    "accountColor",
+    "badgeKey",
+    "badgeName",
+    "badgeValue",
+    "verificationType",
+    "statusMessage",
+    "current",
+    "hideActivityStatus",
+    "isManualOffline",
+    "country",
+    "gender",
+    "birthdate",
+    "stats",
+    "blockedUsers",
+    "friends",
+    "privacy",
+    "createdAt",
+    "updatedAt",
+  ].join(" ")
+)
     .lean();
 
   return {

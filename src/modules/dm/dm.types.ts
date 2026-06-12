@@ -35,6 +35,11 @@ export type DmMessagePayload = {
   fromUserId: string;
   toUserId: string;
 
+  fromUsername?: string;
+  fromPhotoUrl?: string;
+  toUsername?: string;
+  toPhotoUrl?: string;
+
   type: DmMessageType;
 
   text?: string;
@@ -54,9 +59,24 @@ export type DmSendResult =
   | {
       ok: true;
       message: DmMessagePayload;
+
+      /*
+        delivered هنا معناها:
+        هل نعرض للمرسل علامتين صح أم لا.
+        وليس معناها هل الرسالة وصلت فعليًا للسوكيت.
+      */
       delivered: boolean;
+
+      /*
+        هل المستقبل Online حقيقي ونرسل له الرسالة الآن.
+      */
+      targetOnlineReal: boolean;
+
       storedInRedis: boolean;
+
       targetHidden: boolean;
+      isFriend: boolean;
+      canShowTargetActivity: boolean;
     }
   | {
       ok: false;

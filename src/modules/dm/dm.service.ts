@@ -161,6 +161,10 @@ export async function checkDmPermissionOnly(input: {
     ? (toUser as any).blockedUsers.includes(fromUserId)
     : false;
 
+  /*
+    لو أنا حاظره:
+    لا أرسل له أي رسالة.
+  */
   if (fromBlocked) {
     return {
       ok: false as const,
@@ -168,6 +172,10 @@ export async function checkDmPermissionOnly(input: {
     };
   }
 
+  /*
+    لو هو حاظرني:
+    لا تصله أي رسالة.
+  */
   if (toBlocked) {
     return {
       ok: false as const,
@@ -195,12 +203,46 @@ export async function checkDmPermissionOnly(input: {
     };
   }
 
+  /*
+    الحالة المخفية:
+    لو المستقبل مفعل hideActivityStatus أو عامل manual offline
+    يعامل كأنه Offline في الواجهة ولا يظهر delivered/seen.
+  */
+  const targetHidden =
+    (toUser as any).hideActivityStatus === true ||
+    (toUser as any).isManualOffline === true;
+
+  /*
+    Online الحقيقي من sockets.
+    هذا يستخدم فقط لتوصيل الرسالة فعليًا لو المستخدم متصل.
+    لا تستخدمه وحده لإظهار الحالة للمرسل.
+  */
+  const targetOnlineReal = isUserOnline(toUserId);
+
+  /*
+    هل مسموح للمرسل يشوف نشاط المستقبل؟
+    لازم يكونوا أصدقاء + المستقبل ليس مخفي الحالة.
+  */
+  const canShowTargetActivity = isFriend && !targetHidden;
+
   return {
     ok: true as const,
     fromUser,
     toUser,
-    targetHidden: (toUser as any).hideActivityStatus === true,
-    targetOnlineReal: isUserOnline(toUserId),
+
+    isFriend,
+
+    targetHidden,
+    targetOnlineReal,
+
+    /*
+      تستخدمها في:
+      - إظهار Online/Offline
+      - إرسال delivered
+      - إرسال seen
+      - typing
+    */
+    canShowTargetActivity,
   };
 }
 export async function sendDmMessageService(input: {
@@ -252,10 +294,10 @@ export async function sendDmMessageService(input: {
     };
   }
 
-const permission = await checkDmPermissionOnly({
-  fromUserId,
-  toUserId,
-});
+  const permission = await checkDmPermissionOnly({
+    fromUserId,
+    toUserId,
+  });
 
   if (!permission.ok) {
     return permission;
@@ -270,6 +312,12 @@ const permission = await checkDmPermissionOnly({
 
     fromUserId,
     toUserId,
+
+    fromUsername: readText((permission.fromUser as any).username),
+    fromPhotoUrl: readText((permission.fromUser as any).photoUrl),
+
+    toUsername: readText((permission.toUser as any).username),
+    toPhotoUrl: readText((permission.toUser as any).photoUrl),
 
     type,
     text: type === "text" ? text : readText(input.payload.text),
@@ -286,12 +334,25 @@ const permission = await checkDmPermissionOnly({
   };
 
   /*
-    مهم:
-    هنا نستخدم isUserOnline الحقيقي من sockets.
-    لا نستخدم hideActivityStatus.
+    Online الحقيقي من sockets.
+    هذا فقط لتحديد هل نرسل الرسالة فورًا أم نخزنها في Redis.
   */
   const targetOnlineReal = isUserOnline(toUserId);
 
+  /*
+    هل المرسل مسموح له يعرف أن الرسالة وصلت؟
+    لازم يكون:
+    - صديق
+    - والمستقبل ليس مخفي الحالة
+  */
+  const canShowTargetActivity =
+    permission.isFriend === true && permission.targetHidden !== true;
+
+  /*
+    لو المستقبل Offline حقيقي:
+    نخزن الرسالة في Redis.
+    في كل الأحوال تظهر للمرسل علامة واحدة فقط.
+  */
   if (!targetOnlineReal) {
     await savePendingDmMessage({
       toUserId,
@@ -301,21 +362,35 @@ const permission = await checkDmPermissionOnly({
     return {
       ok: true,
       message,
+
       delivered: false,
+      targetOnlineReal: false,
       storedInRedis: true,
+
       targetHidden: permission.targetHidden,
+      isFriend: permission.isFriend,
+      canShowTargetActivity,
     };
   }
 
+  /*
+    لو المستقبل Online حقيقي:
+    الرسالة ستصل له فورًا.
+    لكن علامتين صح تظهر فقط لو canShowTargetActivity = true.
+  */
   return {
     ok: true,
     message,
-    delivered: true,
+
+    delivered: canShowTargetActivity,
+    targetOnlineReal: true,
     storedInRedis: false,
+
     targetHidden: permission.targetHidden,
+    isFriend: permission.isFriend,
+    canShowTargetActivity,
   };
 }
-
 export async function getAndClearPendingDmMessages(userId: string) {
   const messages = await getPendingDmMessages(userId);
 
@@ -335,7 +410,7 @@ export async function canSendDmSignal(input: {
   if (!permission.ok) return permission;
 
   /*
-    ممنوع إرسال typing / seen لو المستقبل Offline حقيقي
+    ممنوع إرسال typing / seen لو المستقبل Offline حقيقي.
   */
   if (!permission.targetOnlineReal) {
     return {
@@ -345,9 +420,21 @@ export async function canSendDmSignal(input: {
   }
 
   /*
-    مهم:
-    لو المرسل نفسه مخفي حالته، لا نرسل typing ولا seen
-    حتى لو المستقبل Online.
+    لو ليسوا أصدقاء:
+    لا typing
+    لا seen
+    لا delivered ظاهر
+  */
+  if (!permission.isFriend) {
+    return {
+      ok: false as const,
+      reason: "not_friend",
+    };
+  }
+
+  /*
+    لو المرسل نفسه مخفي حالته:
+    لا نرسل typing ولا seen للطرف الآخر.
   */
   const fromHidden =
     (permission.fromUser as any).hideActivityStatus === true ||
@@ -357,6 +444,17 @@ export async function canSendDmSignal(input: {
     return {
       ok: false as const,
       reason: "sender_hidden_activity",
+    };
+  }
+
+  /*
+    لو المستقبل مخفي حالته:
+    لا نرسل typing/seen له أيضًا حسب منطق الخصوصية الصارم.
+  */
+  if (permission.targetHidden) {
+    return {
+      ok: false as const,
+      reason: "target_hidden_activity",
     };
   }
 
