@@ -5,7 +5,7 @@ import { storeHandlers } from "../modules/store/store.handlers";
 import { authHandlers } from "../modules/auth/auth.handlers";
 import { friendsHandlers } from "../modules/friends/friends.handlers";
 import { chatsHandlers } from "../modules/chats/chats.handlers";
-import { roomsHandlers } from "../modules/rooms/rooms.handlers";
+import { roomHandlers } from "../modules/rooms/handlers/room.handlers";
 import { tweetsHandlers } from "../modules/tweets/tweets.handlers";
 import { notificationsHandlers } from "../modules/notifications/notifications.handlers";
 import { featuresHandlers } from "../modules/features/features.handlers";
@@ -17,7 +17,7 @@ const handlers: Record<string, WsHandler> = {
 
   ...friendsHandlers,
   ...chatsHandlers,
-  ...roomsHandlers,
+  ...roomHandlers,
   ...tweetsHandlers,
   ...notificationsHandlers,
   ...featuresHandlers,

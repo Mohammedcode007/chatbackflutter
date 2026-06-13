@@ -62,6 +62,22 @@ export const WS_HANDLERS = {
 
   FEATURES_MY: "features.my",
   FEATURES_ACTIVATE: "features.activate",
+  ROOM_CREATE: "room.create",
+  ROOM_JOIN: "room.join",
+  ROOM_LEAVE: "room.leave",
+  ROOM_LIST: "room.list",
+
+  ROOM_MESSAGE_SEND: "room.message.send",
+  ROOM_MESSAGE_REACTION: "room.message.reaction",
+
+  ROOM_ROLE_SET: "room.role.set",
+  ROOM_BAN_USER: "room.ban.user",
+  ROOM_SET_PASSWORD: "room.password.set",
+  ROOM_LOCK_SET: "room.lock.set",
+  ROOM_PIN_SET: "room.pin.set",
+
+  ROOM_FAVORITE_TOGGLE: "room.favorite.toggle",
+  ROOM_BOOST: "room.boost",
 } as const;
 
 export const WS_EVENTS = {
@@ -115,10 +131,6 @@ export const WS_EVENTS = {
   CHAT_PENDING_DELIVERY_EVENT: "chat_pending_delivery_event",
   USERS_BLOCKED_LIST_EVENT: "users_blocked_list_event",
   ROOMS_LIST_EVENT: "rooms_list_event",
-  ROOM_JOIN_EVENT: "room_join_event",
-  ROOM_LEAVE_EVENT: "room_leave_event",
-  ROOM_MESSAGE_EVENT: "room_message_event",
-  ROOM_USERS_EVENT: "room_users_event",
   TWEETS_LIST_EVENT: "tweets_list_event",
   TWEET_CREATE_EVENT: "tweet_create_event",
   TWEET_LIKE_EVENT: "tweet_like_event",
@@ -127,6 +139,18 @@ export const WS_EVENTS = {
 
   NOTIFICATION_EVENT: "notification_event",
   FEATURES_EVENT: "features_event",
-
+  ROOM_ACTIVE_COUNT_EVENT: "room.active_count.update",
   ERROR_EVENT: "error_event",
+  ROOM_CREATE_EVENT: "room.create",
+  ROOM_JOIN_EVENT: "room.join",
+  ROOM_LEAVE_EVENT: "room.leave",
+  ROOM_LIST_EVENT: "room.list",
+
+  ROOM_MESSAGE_EVENT: "room.message",
+  ROOM_MESSAGE_SEND_EVENT: "room.message.send",
+  ROOM_REACTION_EVENT: "room.message.reaction",
+
+  ROOM_USERS_EVENT: "room.users",
+  ROOM_UPDATE_EVENT: "room.update",
+  ROOM_ERROR_EVENT: "room.error",
 } as const;
