@@ -557,3 +557,68 @@ export function getRoomClientsDebugState() {
     ),
   };
 }
+export function getUserSocketIds(userIdValue: string) {
+  const userId = clean(userIdValue);
+
+  if (!userId) {
+    return [] as string[];
+  }
+
+  const socketIds: string[] = [];
+
+  for (const [socketId, mappedUserId] of socketUsers.entries()) {
+    if (mappedUserId === userId) {
+      socketIds.push(socketId);
+    }
+  }
+
+  return socketIds;
+}
+
+export function removeUserFromSpecificRoom(input: {
+  roomId: string;
+  userId: string;
+}) {
+  const roomId = clean(input.roomId);
+  const userId = clean(input.userId);
+
+  if (!roomId || !userId) {
+    return {
+      ok: false,
+      socketIds: [] as string[],
+    };
+  }
+
+  const socketIds = getUserSocketIds(userId);
+
+  roomUsers.get(roomId)?.delete(userId);
+
+  if (roomUsers.get(roomId)?.size === 0) {
+    roomUsers.delete(roomId);
+  }
+
+  userRooms.get(userId)?.delete(roomId);
+
+  if (userRooms.get(userId)?.size === 0) {
+    userRooms.delete(userId);
+  }
+
+  for (const socketId of socketIds) {
+    socketRooms.get(socketId)?.delete(roomId);
+
+    if (socketRooms.get(socketId)?.size === 0) {
+      socketRooms.delete(socketId);
+    }
+  }
+
+  lastDisconnectedRooms.get(userId)?.delete(roomId);
+
+  if (lastDisconnectedRooms.get(userId)?.size === 0) {
+    lastDisconnectedRooms.delete(userId);
+  }
+
+  return {
+    ok: true,
+    socketIds,
+  };
+}

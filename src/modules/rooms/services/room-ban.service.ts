@@ -1,12 +1,118 @@
 import { RoomModel } from "../models/Room.model";
-import { getRoomRole, canRoomAction, roleRank } from "./room-role.service";
+import {
+  getRoomRole,
+  canRoomAction,
+  canModerateTarget,
+} from "./room-role.service";
+
 import {
   addBannedIp,
   normalizeIp,
   removeBannedIp,
 } from "../utils/room.ip";
-import { sanitizeRoomId, sanitizeUserId } from "../utils/room.sanitize";
 
+import {
+  sanitizeRoomId,
+  sanitizeUserId,
+} from "../utils/room.sanitize";
+
+/*
+  طرد مستخدم من الغرفة.
+  مهم:
+  هذه الدالة تعدل MongoDB فقط.
+  إخراج المستخدم من Socket.IO room يتم في الـ handler باستخدام:
+  removeUserFromSpecificRoom + socket.leave(roomId)
+*/
+export async function kickUserFromRoomService(input: {
+  actorId: string;
+  actorUsername?: string;
+
+  targetUserId: string;
+  targetUsername?: string;
+
+  roomId: string;
+}) {
+  const actorId = sanitizeUserId(input.actorId);
+  const targetUserId = sanitizeUserId(input.targetUserId);
+  const roomId = sanitizeRoomId(input.roomId);
+
+  if (!actorId || !targetUserId || !roomId) {
+    return {
+      ok: false as const,
+      reason: "invalid_kick_payload",
+    };
+  }
+
+  if (actorId === targetUserId) {
+    return {
+      ok: false as const,
+      reason: "cannot_kick_yourself",
+    };
+  }
+
+  const room = await RoomModel.findOne({ roomId });
+
+  if (!room) {
+    return {
+      ok: false as const,
+      reason: "room_not_found",
+    };
+  }
+
+  const actorRole = getRoomRole(room, actorId);
+  const targetRole = getRoomRole(room, targetUserId);
+
+  if (!canRoomAction(actorRole, "kick_user")) {
+    return {
+      ok: false as const,
+      reason: "no_permission",
+      actorRole,
+      targetRole,
+    };
+  }
+
+  if (
+    !canModerateTarget({
+      actorRole,
+      targetRole,
+      action: "kick_user",
+    })
+  ) {
+    return {
+      ok: false as const,
+      reason: "cannot_kick_this_user",
+      actorRole,
+      targetRole,
+    };
+  }
+
+  /*
+    الطرد لا يزيل الرتبة ولا يضيف المستخدم للحظر.
+    فقط يخرجه من الموجودين الآن.
+  */
+  room.activeUsers = Array.isArray(room.activeUsers)
+    ? room.activeUsers.filter((id) => String(id) !== targetUserId)
+    : [];
+
+  await room.save();
+
+  return {
+    ok: true as const,
+    room,
+    actorRole,
+    targetRole,
+    roomId,
+    targetUserId,
+    targetUsername: input.targetUsername || "",
+  };
+}
+
+/*
+  حظر مستخدم من الغرفة.
+  مهم:
+  هذه الدالة تضيف المستخدم إلى bannedUsers وتزيله من activeUsers.
+  إخراجه من Socket.IO يتم في الـ handler.
+*/
 export async function banUserFromRoomService(input: {
   actorId: string;
   actorUsername?: string;
@@ -28,65 +134,74 @@ export async function banUserFromRoomService(input: {
   const roomId = sanitizeRoomId(input.roomId);
 
   if (!actorId || !targetUserId || !roomId) {
-    return { ok: false as const, reason: "invalid_ban_payload" };
+    return {
+      ok: false as const,
+      reason: "invalid_ban_payload",
+    };
   }
 
   if (actorId === targetUserId) {
-    return { ok: false as const, reason: "cannot_ban_yourself" };
+    return {
+      ok: false as const,
+      reason: "cannot_ban_yourself",
+    };
   }
 
   const room = await RoomModel.findOne({ roomId });
 
   if (!room) {
-    return { ok: false as const, reason: "room_not_found" };
+    return {
+      ok: false as const,
+      reason: "room_not_found",
+    };
   }
 
   const actorRole = getRoomRole(room, actorId);
   const targetRole = getRoomRole(room, targetUserId);
 
   if (!canRoomAction(actorRole, "ban_user")) {
-    return { ok: false as const, reason: "no_permission" };
+    return {
+      ok: false as const,
+      reason: "no_permission",
+      actorRole,
+      targetRole,
+    };
   }
 
-  /*
-    لا أحد يحظر creator.
-  */
-  if (targetRole === "creator") {
-    return { ok: false as const, reason: "cannot_ban_creator" };
-  }
-
-  /*
-    لا يمكن حظر شخص أعلى منك أو مساوي لك.
-    creator مستثنى لأنه أعلى الكل.
-  */
-  if (actorRole !== "creator" && roleRank(actorRole) <= roleRank(targetRole)) {
-    return { ok: false as const, reason: "cannot_ban_same_or_higher_role" };
-  }
-
-  /*
-    admin يحظر member أو none فقط.
-  */
   if (
-    actorRole === "admin" &&
-    targetRole !== "member" &&
-    targetRole !== "none"
+    !canModerateTarget({
+      actorRole,
+      targetRole,
+      action: "ban_user",
+    })
   ) {
-    return { ok: false as const, reason: "admin_can_ban_member_or_none_only" };
+    return {
+      ok: false as const,
+      reason: "cannot_ban_this_user",
+      actorRole,
+      targetRole,
+    };
   }
 
   /*
     أضف user ban.
   */
+  if (!Array.isArray(room.bannedUsers)) {
+    room.bannedUsers = [];
+  }
+
   if (!room.bannedUsers.includes(targetUserId)) {
     room.bannedUsers.push(targetUserId);
   }
 
   /*
-    عند حظره، نزيله من الموجودين الآن.
-    لا نزيله من owners/admins/members هنا إلا لو أنت تريد الحظر يسحب رتبته.
-    الأفضل: الحظر لا يمسح الرتبة، فقط يمنعه من الدخول.
+    عند الحظر نخرجه من الموجودين الآن.
+    لا نحذف رتبته هنا.
+    لو تريد الحظر يسحب الرتبة، قل لي وسأعدله لك.
   */
-  room.activeUsers = room.activeUsers.filter((id) => id !== targetUserId);
+  room.activeUsers = Array.isArray(room.activeUsers)
+    ? room.activeUsers.filter((id) => String(id) !== targetUserId)
+    : [];
 
   let bannedIp = "";
 
@@ -96,7 +211,7 @@ export async function banUserFromRoomService(input: {
     if (bannedIp) {
       room.bannedIps = addBannedIp({
         ip: bannedIp,
-        bannedIps: room.bannedIps,
+        bannedIps: Array.isArray(room.bannedIps) ? room.bannedIps : [],
       });
     }
   }
@@ -108,11 +223,17 @@ export async function banUserFromRoomService(input: {
     room,
     actorRole,
     targetRole,
+    roomId,
+    targetUserId,
+    targetUsername: input.targetUsername || "",
     bannedIp,
     banIp: input.banIp === true && Boolean(bannedIp),
   };
 }
 
+/*
+  فك حظر مستخدم.
+*/
 export async function unbanUserFromRoomService(input: {
   actorId: string;
   targetUserId: string;
@@ -123,35 +244,50 @@ export async function unbanUserFromRoomService(input: {
   const roomId = sanitizeRoomId(input.roomId);
 
   if (!actorId || !targetUserId || !roomId) {
-    return { ok: false as const, reason: "invalid_unban_payload" };
+    return {
+      ok: false as const,
+      reason: "invalid_unban_payload",
+    };
   }
 
   const room = await RoomModel.findOne({ roomId });
 
   if (!room) {
-    return { ok: false as const, reason: "room_not_found" };
+    return {
+      ok: false as const,
+      reason: "room_not_found",
+    };
   }
 
   const actorRole = getRoomRole(room, actorId);
 
   /*
-    فك الحظر يكون creator/owner فقط.
-    لو تريد admin كمان يفك الحظر، أضف unban_user في canRoomAction للadmin.
+    فك الحظر يكون creator/owner فقط حسب canRoomAction.
   */
   if (!canRoomAction(actorRole, "unban_user")) {
-    return { ok: false as const, reason: "no_permission" };
+    return {
+      ok: false as const,
+      reason: "no_permission",
+    };
   }
 
-  room.bannedUsers = room.bannedUsers.filter((id) => id !== targetUserId);
+  room.bannedUsers = Array.isArray(room.bannedUsers)
+    ? room.bannedUsers.filter((id) => String(id) !== targetUserId)
+    : [];
 
   await room.save();
 
   return {
     ok: true as const,
     room,
+    roomId,
+    targetUserId,
   };
 }
 
+/*
+  حظر IP من الغرفة.
+*/
 export async function banIpFromRoomService(input: {
   actorId: string;
   roomId: string;
@@ -162,24 +298,33 @@ export async function banIpFromRoomService(input: {
   const ip = normalizeIp(input.ip);
 
   if (!actorId || !roomId || !ip) {
-    return { ok: false as const, reason: "invalid_ip_ban_payload" };
+    return {
+      ok: false as const,
+      reason: "invalid_ip_ban_payload",
+    };
   }
 
   const room = await RoomModel.findOne({ roomId });
 
   if (!room) {
-    return { ok: false as const, reason: "room_not_found" };
+    return {
+      ok: false as const,
+      reason: "room_not_found",
+    };
   }
 
   const actorRole = getRoomRole(room, actorId);
 
   if (!canRoomAction(actorRole, "ban_ip")) {
-    return { ok: false as const, reason: "no_permission" };
+    return {
+      ok: false as const,
+      reason: "no_permission",
+    };
   }
 
   room.bannedIps = addBannedIp({
     ip,
-    bannedIps: room.bannedIps,
+    bannedIps: Array.isArray(room.bannedIps) ? room.bannedIps : [],
   });
 
   await room.save();
@@ -191,6 +336,9 @@ export async function banIpFromRoomService(input: {
   };
 }
 
+/*
+  فك حظر IP من الغرفة.
+*/
 export async function unbanIpFromRoomService(input: {
   actorId: string;
   roomId: string;
@@ -201,24 +349,33 @@ export async function unbanIpFromRoomService(input: {
   const ip = normalizeIp(input.ip);
 
   if (!actorId || !roomId || !ip) {
-    return { ok: false as const, reason: "invalid_ip_unban_payload" };
+    return {
+      ok: false as const,
+      reason: "invalid_ip_unban_payload",
+    };
   }
 
   const room = await RoomModel.findOne({ roomId });
 
   if (!room) {
-    return { ok: false as const, reason: "room_not_found" };
+    return {
+      ok: false as const,
+      reason: "room_not_found",
+    };
   }
 
   const actorRole = getRoomRole(room, actorId);
 
   if (!canRoomAction(actorRole, "unban_ip")) {
-    return { ok: false as const, reason: "no_permission" };
+    return {
+      ok: false as const,
+      reason: "no_permission",
+    };
   }
 
   room.bannedIps = removeBannedIp({
     ip,
-    bannedIps: room.bannedIps,
+    bannedIps: Array.isArray(room.bannedIps) ? room.bannedIps : [],
   });
 
   await room.save();
@@ -230,6 +387,10 @@ export async function unbanIpFromRoomService(input: {
   };
 }
 
+/*
+  فحص هل المستخدم محظور من الغرفة.
+  تستخدم داخل joinRoomService قبل إدخال المستخدم.
+*/
 export async function isUserBannedFromRoomService(input: {
   roomId: string;
   userId: string;
@@ -250,7 +411,9 @@ export async function isUserBannedFromRoomService(input: {
   }
 
   const userBanned =
-    Array.isArray(room.bannedUsers) && room.bannedUsers.includes(userId);
+    Boolean(userId) &&
+    Array.isArray(room.bannedUsers) &&
+    room.bannedUsers.map(String).includes(userId);
 
   const ipBanned =
     Boolean(ip) &&

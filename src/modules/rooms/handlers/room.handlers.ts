@@ -4,7 +4,9 @@ import { sendError, sendSuccess } from "../../../websocket/ws.utils";
 import { sendToUserIfOnline } from "../../../websocket/stores/clients.store";
 import {
   getRoomUsers,
+  isUserInRoom,
   updateRoomUserRole,
+  removeUserFromSpecificRoom,
 } from "../../../websocket/stores/roomClients.store";
 import { WS_EVENTS, WS_HANDLERS } from "../../../websocket/ws.events";
 
@@ -16,7 +18,10 @@ import { listRoomsService } from "../services/room-query.service";
 import { toggleFavoriteRoomService } from "../services/room-favorite.service";
 import { boostRoomService } from "../services/room-boost.service";
 import { getClientIp } from "../utils/room.ip";
-
+import {
+  kickUserFromRoomService,
+  banUserFromRoomService,
+} from "../services/room-ban.service";
 const ROOM_MESSAGE_EVENT = "room.message";
 const ROOM_USERS_EVENT = "room.users";
 const ROOM_ACTIVE_COUNT_EVENT = "room.active_count.update";
@@ -103,7 +108,56 @@ function broadcastToRoomUsers(roomId: string, payload: any) {
     sendToUserIfOnline(userId, payload);
   }
 }
+function forceUserLeaveLiveRoom(input: {
+  context: any;
+  roomId: string;
+  targetUserId: string;
+  eventName: string;
+  message: string;
+}) {
+  const roomId = text(input.roomId);
+  const targetUserId = text(input.targetUserId);
 
+  if (!roomId || !targetUserId) {
+    return {
+      socketIds: [] as string[],
+    };
+  }
+
+  const liveLeave = removeUserFromSpecificRoom({
+    roomId,
+    userId: targetUserId,
+  });
+
+  for (const socketId of liveLeave.socketIds) {
+    const targetSocket = (input.context.socket as any).nsp?.sockets?.get(
+      socketId
+    );
+
+    if (targetSocket) {
+      targetSocket.leave(roomId);
+
+      targetSocket.emit(input.eventName, {
+        roomId,
+        message: input.message,
+      });
+    }
+  }
+
+  /*
+    احتياطيًا، لأن عندك نظام إرسال حسب userId أيضًا.
+  */
+  sendToUserIfOnline(targetUserId, {
+    handler: input.eventName,
+    type: input.eventName,
+    roomId,
+    message: input.message,
+  });
+
+  return {
+    socketIds: liveLeave.socketIds,
+  };
+}
 function enrichLiveMessage(roomId: string, message: any) {
   if (!message) return message;
 
@@ -283,7 +337,365 @@ function makeRoomRoleMessage(input: {
     createdAt: new Date().toISOString(),
   };
 }
+const handleRoomKick: WsHandler = async (context) => {
+  const logName = "ROOM_KICK_HANDLER";
 
+  try {
+    logStart(logName, context);
+
+    if (!requireLogin(context, WS_EVENTS.ROOM_UPDATE_EVENT)) {
+      console.log(`[${logName}] requireLogin failed`);
+      logEnd(logName);
+      return;
+    }
+
+    const actorId = context.client!.userId!;
+    const actorUsername = text(context.client?.username);
+
+    const roomId = text(context.message.roomId || context.message.room_id);
+
+    const targetUserId = text(
+      context.message.targetUserId || context.message.target_user_id
+    );
+
+    const targetUsername = text(
+      context.message.targetUsername || context.message.target_username
+    );
+
+    if (!roomId) {
+      sendError(
+        context.socket,
+        WS_EVENTS.ROOM_UPDATE_EVENT,
+        "room_id_required",
+        context.message.request_id
+      );
+
+      logEnd(logName);
+      return;
+    }
+
+    if (!targetUserId) {
+      sendError(
+        context.socket,
+        WS_EVENTS.ROOM_UPDATE_EVENT,
+        "target_user_id_required",
+        context.message.request_id
+      );
+
+      logEnd(logName);
+      return;
+    }
+
+    const targetLiveUser = getRoomLiveUser(roomId, targetUserId);
+
+    const finalTargetUsername =
+      targetUsername || text((targetLiveUser as any)?.username) || targetUserId;
+
+    const result = await kickUserFromRoomService({
+      actorId,
+      actorUsername,
+      targetUserId,
+      targetUsername: finalTargetUsername,
+      roomId,
+    });
+
+    console.log(`[${logName}] service result:`, result);
+
+    if (!result.ok) {
+      sendError(
+        context.socket,
+        WS_EVENTS.ROOM_UPDATE_EVENT,
+        result.reason,
+        context.message.request_id
+      );
+
+      logEnd(logName);
+      return;
+    }
+
+    forceUserLeaveLiveRoom({
+      context,
+      roomId,
+      targetUserId,
+      eventName: "room:kicked",
+      message: "تم طردك من الغرفة",
+    });
+
+    const activeUsers = getActiveUsers(roomId);
+    const activeCount = activeUsers.length;
+
+    sendSuccess(context.socket, {
+      handler: WS_EVENTS.ROOM_UPDATE_EVENT,
+      type: "kick",
+      request_id: context.message.request_id,
+      roomId,
+      targetUserId,
+      targetUsername: finalTargetUsername,
+      activeCount,
+      activeUsers,
+    });
+
+    broadcastToRoomUsers(roomId, {
+      handler: ROOM_ACTIVE_COUNT_EVENT,
+      type: "active_count",
+      roomId,
+      activeCount,
+      activeUsers,
+      users: activeUsers,
+    });
+
+    broadcastToRoomUsers(roomId, {
+      handler: ROOM_USERS_EVENT,
+      type: "users",
+      roomId,
+      users: activeUsers,
+      activeUsers,
+      activeCount,
+    });
+
+    broadcastToRoomUsers(roomId, {
+      handler: ROOM_MESSAGE_EVENT,
+      type: "message",
+      roomId,
+      message: makeRoomModerationMessage({
+        roomId,
+        actorId,
+        actorUsername,
+        targetUserId,
+        targetUsername: finalTargetUsername,
+        action: "kick",
+      }),
+    });
+
+    logEnd(logName);
+  } catch (error) {
+    console.error(`[${logName}] unexpected error:`, error);
+
+    sendError(
+      context.socket,
+      WS_EVENTS.ROOM_UPDATE_EVENT,
+      "room_kick_failed",
+      context.message.request_id
+    );
+
+    logEnd(logName);
+  }
+};
+function makeRoomModerationMessage(input: {
+  roomId: string;
+
+  actorId: string;
+  actorUsername: string;
+
+  targetUserId: string;
+  targetUsername: string;
+
+  action: "kick" | "ban";
+}) {
+  const now = Date.now();
+
+  const actorUsername = text(input.actorUsername) || "User";
+  const targetUsername = text(input.targetUsername) || "User";
+
+  const isBan = input.action === "ban";
+
+  const textValue = isBan
+    ? `${actorUsername} حظر ${targetUsername}`
+    : `${actorUsername} طرد ${targetUsername}`;
+
+  return {
+    messageId: `${input.action}_${input.actorId}_${input.targetUserId}_${now}`,
+    roomId: input.roomId,
+
+    messageKind: "system",
+    type: "none",
+
+    fromUserId: input.actorId,
+    fromUsername: actorUsername,
+    fromPhotoUrl: "",
+    fromRole: "none",
+
+    text: textValue,
+
+    media: null,
+    mention: null,
+    gift: null,
+    entryVideo: null,
+    replyTo: null,
+    reactions: [],
+
+    accountColor: "",
+    badgeKey: "",
+    badgeName: "",
+    badgeValue: "",
+    verificationType: "none",
+
+    system: {
+      action: isBan ? "user_banned" : "user_kicked",
+
+      actorId: input.actorId,
+      actorUsername,
+
+      targetUserId: input.targetUserId,
+      targetUsername,
+
+      message: textValue,
+    },
+
+    createdAt: new Date().toISOString(),
+  };
+}
+const handleRoomBan: WsHandler = async (context) => {
+  const logName = "ROOM_BAN_HANDLER";
+
+  try {
+    logStart(logName, context);
+
+    if (!requireLogin(context, WS_EVENTS.ROOM_UPDATE_EVENT)) {
+      console.log(`[${logName}] requireLogin failed`);
+      logEnd(logName);
+      return;
+    }
+
+    const actorId = context.client!.userId!;
+    const actorUsername = text(context.client?.username);
+
+    const roomId = text(context.message.roomId || context.message.room_id);
+
+    const targetUserId = text(
+      context.message.targetUserId || context.message.target_user_id
+    );
+
+    const targetUsername = text(
+      context.message.targetUsername || context.message.target_username
+    );
+
+    const targetIp = text(context.message.targetIp || context.message.target_ip);
+    const banIp = boolValue(context.message.banIp || context.message.ban_ip);
+
+    if (!roomId) {
+      sendError(
+        context.socket,
+        WS_EVENTS.ROOM_UPDATE_EVENT,
+        "room_id_required",
+        context.message.request_id
+      );
+
+      logEnd(logName);
+      return;
+    }
+
+    if (!targetUserId) {
+      sendError(
+        context.socket,
+        WS_EVENTS.ROOM_UPDATE_EVENT,
+        "target_user_id_required",
+        context.message.request_id
+      );
+
+      logEnd(logName);
+      return;
+    }
+
+    const targetLiveUser = getRoomLiveUser(roomId, targetUserId);
+
+    const finalTargetUsername =
+      targetUsername || text((targetLiveUser as any)?.username) || targetUserId;
+
+    const result = await banUserFromRoomService({
+      actorId,
+      actorUsername,
+      targetUserId,
+      targetUsername: finalTargetUsername,
+      roomId,
+      targetIp,
+      banIp,
+    });
+
+    console.log(`[${logName}] service result:`, result);
+
+    if (!result.ok) {
+      sendError(
+        context.socket,
+        WS_EVENTS.ROOM_UPDATE_EVENT,
+        result.reason,
+        context.message.request_id
+      );
+
+      logEnd(logName);
+      return;
+    }
+
+    forceUserLeaveLiveRoom({
+      context,
+      roomId,
+      targetUserId,
+      eventName: "room:banned",
+      message: "أنت محظور من هذه الغرفة",
+    });
+
+    const activeUsers = getActiveUsers(roomId);
+    const activeCount = activeUsers.length;
+
+    sendSuccess(context.socket, {
+      handler: WS_EVENTS.ROOM_UPDATE_EVENT,
+      type: "ban",
+      request_id: context.message.request_id,
+      roomId,
+      targetUserId,
+      targetUsername: finalTargetUsername,
+      activeCount,
+      activeUsers,
+      banIp: result.banIp,
+      bannedIp: result.bannedIp,
+    });
+
+    broadcastToRoomUsers(roomId, {
+      handler: ROOM_ACTIVE_COUNT_EVENT,
+      type: "active_count",
+      roomId,
+      activeCount,
+      activeUsers,
+      users: activeUsers,
+    });
+
+    broadcastToRoomUsers(roomId, {
+      handler: ROOM_USERS_EVENT,
+      type: "users",
+      roomId,
+      users: activeUsers,
+      activeUsers,
+      activeCount,
+    });
+
+    broadcastToRoomUsers(roomId, {
+      handler: ROOM_MESSAGE_EVENT,
+      type: "message",
+      roomId,
+      message: makeRoomModerationMessage({
+        roomId,
+        actorId,
+        actorUsername,
+        targetUserId,
+        targetUsername: finalTargetUsername,
+        action: "ban",
+      }),
+    });
+
+    logEnd(logName);
+  } catch (error) {
+    console.error(`[${logName}] unexpected error:`, error);
+
+    sendError(
+      context.socket,
+      WS_EVENTS.ROOM_UPDATE_EVENT,
+      "room_ban_failed",
+      context.message.request_id
+    );
+
+    logEnd(logName);
+  }
+};
 const handleRoomRoleSet: WsHandler = async (context) => {
   const logName = "ROOM_ROLE_SET_HANDLER";
 
@@ -569,17 +981,27 @@ const handleRoomJoin: WsHandler = async (context) => {
 
     console.log(`[${logName}] service result:`, result);
 
-    if (!result.ok) {
-      sendError(
-        context.socket,
-        WS_EVENTS.ROOM_JOIN_EVENT,
-        result.reason,
-        context.message.request_id
-      );
+if (!result.ok) {
+  const reason = text(result.reason);
 
-      logEnd(logName);
-      return;
-    }
+  const errorMessage =
+    reason === "room_banned" ||
+    reason === "ROOM_BANNED" ||
+    reason === "banned" ||
+    reason === "BANNED"
+      ? "أنت محظور من هذه الغرفة"
+      : result.reason;
+
+  sendError(
+    context.socket,
+    WS_EVENTS.ROOM_JOIN_EVENT,
+    errorMessage,
+    context.message.request_id
+  );
+
+  logEnd(logName);
+  return;
+}
 
     const activeUsers = getActiveUsers(roomId);
     const activeCount = activeUsers.length;
@@ -901,7 +1323,22 @@ const handleRoomMessageSend: WsHandler = async (context) => {
       logEnd(logName);
       return;
     }
+const userStillInRoom = isUserInRoom({
+  roomId,
+  userId,
+});
 
+if (!userStillInRoom) {
+  sendError(
+    context.socket,
+    WS_EVENTS.ROOM_MESSAGE_SEND_EVENT,
+    "room_not_joined",
+    context.message.request_id
+  );
+
+  logEnd(logName);
+  return;
+}
     const result = await sendRoomLiveMessageService({
       userId,
       username,
@@ -1094,4 +1531,7 @@ export const roomHandlers = {
   [WS_HANDLERS.ROOM_FAVORITE_TOGGLE]: handleRoomFavoriteToggle,
   [WS_HANDLERS.ROOM_BOOST]: handleRoomBoost,
   [WS_HANDLERS.ROOM_ROLE_SET]: handleRoomRoleSet,
+
+  [WS_HANDLERS.ROOM_KICK]: handleRoomKick,
+  [WS_HANDLERS.ROOM_BAN]: handleRoomBan,
 };

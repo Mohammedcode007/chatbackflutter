@@ -86,6 +86,7 @@ export function canRoomAction(role: RoomRole, action: RoomPermissionAction) {
       "set_member",
       "remove_role",
 
+      "kick_user",
       "ban_user",
       "ban_ip",
       "unban_user",
@@ -110,7 +111,7 @@ export function canRoomAction(role: RoomRole, action: RoomPermissionAction) {
 
   /*
     admin:
-    يحظر member/none
+    يحظر/يطرد member/none
     ويعطي member فقط
     ولا يتحكم في owner/admin/creator.
   */
@@ -119,6 +120,7 @@ export function canRoomAction(role: RoomRole, action: RoomPermissionAction) {
       "set_member",
       "remove_role",
 
+      "kick_user",
       "ban_user",
 
       "send_message",
@@ -191,10 +193,7 @@ export function canChangeTargetRole(input: {
   }
 
   if (actorRole === "admin") {
-    if (
-      targetRole === "owner" ||
-      targetRole === "admin"
-    ) {
+    if (targetRole === "owner" || targetRole === "admin") {
       return false;
     }
 
@@ -203,6 +202,63 @@ export function canChangeTargetRole(input: {
 
   return false;
 }
+
+/*
+  هل مسموح للمستخدم أن يطرد أو يحظر الهدف؟
+  تستخدم هذه الدالة في سيرفس الطرد والحظر.
+*/
+export function canModerateTarget(input: {
+  actorRole: RoomRole;
+  targetRole: RoomRole;
+  action: "kick_user" | "ban_user";
+}) {
+  const { actorRole, targetRole } = input;
+
+  /*
+    لا أحد يطرد أو يحظر creator.
+  */
+  if (targetRole === "creator") {
+    return false;
+  }
+
+  /*
+    creator يستطيع طرد/حظر الجميع ما عدا نفسه.
+    فحص actorId === targetUserId يتم في السيرفس.
+  */
+  if (actorRole === "creator") {
+    return true;
+  }
+
+  /*
+    owner لا يطرد أو يحظر owner أو creator.
+    يستطيع التعامل مع admin/member/none.
+  */
+  if (actorRole === "owner") {
+    if (targetRole === "owner" ) {
+      return false;
+    }
+
+    return true;
+  }
+
+  /*
+    admin لا يطرد أو يحظر owner/admin/creator.
+    فقط member أو none.
+  */
+  if (actorRole === "admin") {
+    if (
+      targetRole === "owner" ||
+      targetRole === "admin" 
+    ) {
+      return false;
+    }
+
+    return true;
+  }
+
+  return false;
+}
+
 /*
   تغيير رتبة مستخدم وحفظها في RoomModel.
   هذا يحفظ الدور، لكنه لا يحفظ رسالة الشات.

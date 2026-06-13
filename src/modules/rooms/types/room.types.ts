@@ -27,6 +27,7 @@ export type RoomLiveMessageKind =
   | "leave"
   | "gift"
   | "system"
+  | "role"
   | "entry_video";
 
 /*
@@ -55,18 +56,28 @@ export type RoomLiveMessageType =
 export type RoomSystemAction =
   | "role_changed"
   | "role_removed"
+  | "role_set"
+
+  | "user_kicked"
   | "user_banned"
   | "ip_banned"
+
   | "room_locked"
   | "room_unlocked"
+
   | "password_changed"
   | "password_removed"
+
   | "pinned_changed"
+
   | "join"
   | "leave"
   | "reconnect_join"
+
   | "gift_sent"
-  | "boost_added";
+  | "boost_added"
+
+  | "room_post";
 
 /*
   الصلاحيات داخل الغرفة.
@@ -77,6 +88,7 @@ export type RoomPermissionAction =
   | "set_member"
   | "remove_role"
 
+  | "kick_user"
   | "ban_user"
   | "ban_ip"
   | "unban_user"
@@ -179,6 +191,21 @@ export type RoomSystemPayload = {
   newRole?: RoomRoleWithoutCreator;
 
   dc?: boolean;
+
+  /*
+    اختياري لرسائل الطرد/الحظر/البوست.
+  */
+  message?: string;
+
+  /*
+    اختياري لبوست الغرفة.
+    حاليًا ستستخدم video، ولاحقًا يمكن توسعتها.
+  */
+  postType?: "video" | "image" | "text" | "audio" | string;
+  videoUrl?: string;
+  thumbnailUrl?: string;
+  title?: string;
+  description?: string;
 };
 
 /*
