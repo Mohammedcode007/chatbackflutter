@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-
+import { v2 as cloudinary } from "cloudinary";
 import { UserModel } from "../../models/User.model";
 import { isUserOnline } from "../../websocket/stores/clients.store";
 
@@ -245,6 +245,58 @@ export async function checkDmPermissionOnly(input: {
     canShowTargetActivity,
   };
 }
+async function uploadDmBase64Media(input: {
+  type: DmMessageType;
+  mediaBase64: string;
+  fileName?: string;
+  mimeType?: string;
+  sizeBytes?: number;
+}): Promise<DmMediaPayload> {
+  const { type, mediaBase64 } = input;
+
+  if (type === "text") {
+    throw new Error("invalid_media_type");
+  }
+
+  const base64 = readText(mediaBase64);
+
+  if (!base64) {
+    throw new Error("missing_media_base64");
+  }
+
+  const sizeBytes = Number(input.sizeBytes || 0);
+  const maxSize = getMaxSizeBytes(type);
+
+  if (maxSize > 0 && sizeBytes > maxSize) {
+    throw new Error("file_too_large");
+  }
+
+  const resourceType =
+    type === "audio" || type === "video" ? "video" : "image";
+
+  const folder =
+    type === "audio"
+      ? "bimo/dm/audio"
+      : type === "image"
+      ? "bimo/dm/images"
+      : type === "video"
+      ? "bimo/dm/videos"
+      : "bimo/dm/files";
+
+  const uploaded = await cloudinary.uploader.upload(base64, {
+    folder,
+    resource_type: resourceType,
+  });
+
+  return {
+    url: uploaded.secure_url,
+    fileName: readText(input.fileName),
+    mimeType: readText(input.mimeType),
+    sizeBytes,
+    durationMs: 0,
+    thumbnailUrl: "",
+  };
+}
 export async function sendDmMessageService(input: {
   fromUserId: string;
   payload: any;
@@ -276,23 +328,51 @@ export async function sendDmMessageService(input: {
     };
   }
 
-  let media: DmMediaPayload | null = null;
+let media: DmMediaPayload | null = null;
 
-  try {
+try {
+  const mediaBase64 = readText(
+    input.payload.mediaBase64 || input.payload.media_base64
+  );
+
+  /*
+    الطريقة الجديدة:
+    Flutter يرسل mediaBase64
+    والباك يرفعها Cloudinary.
+  */
+  if (type !== "text" && mediaBase64) {
+    const payloadMedia =
+      input.payload.media && typeof input.payload.media === "object"
+        ? input.payload.media
+        : {};
+
+    media = await uploadDmBase64Media({
+      type,
+      mediaBase64,
+      fileName: readText(payloadMedia.fileName || payloadMedia.file_name),
+      mimeType: readText(payloadMedia.mimeType || payloadMedia.mime_type),
+      sizeBytes: Number(payloadMedia.sizeBytes || payloadMedia.size_bytes || 0),
+    });
+  } else {
+    /*
+      الطريقة القديمة:
+      لو Flutter أرسل media.url جاهز.
+    */
     media = normalizeMedia(type, input.payload.media);
-  } catch (error: any) {
-    return {
-      ok: false,
-      reason: error?.message || "invalid_media",
-    };
   }
+} catch (error: any) {
+  return {
+    ok: false,
+    reason: error?.message || "invalid_media",
+  };
+}
 
-  if (type !== "text" && !media) {
-    return {
-      ok: false,
-      reason: "missing_media",
-    };
-  }
+if (type !== "text" && !media) {
+  return {
+    ok: false,
+    reason: "missing_media",
+  };
+}
 
   const permission = await checkDmPermissionOnly({
     fromUserId,
