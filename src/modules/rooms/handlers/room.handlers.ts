@@ -27,6 +27,7 @@ import {
   banUserFromRoomService,
 } from "../services/room-ban.service";
 import { RoomModel } from "../models/Room.model";
+import { UserModel } from "../../../models/User.model";
 const ROOM_MESSAGE_EVENT = "room.message";
 const ROOM_USERS_EVENT = "room.users";
 const ROOM_ACTIVE_COUNT_EVENT = "room.active_count.update";
@@ -37,6 +38,83 @@ function text(value: any) {
 
 function boolValue(value: any) {
   return value === true || value === "true" || value === 1 || value === "1";
+}
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+async function resolveTargetUser(input: {
+  targetUserId?: string;
+  targetUsername?: string;
+}) {
+  const targetUserId = text(input.targetUserId);
+  const targetUsername = text(input.targetUsername);
+
+  /*
+    لو الفرونت أرسل ID، نستخدمه عادي.
+  */
+  if (targetUserId) {
+    const user = await UserModel.findOne({ userId: targetUserId })
+      .select("userId username photoUrl")
+      .lean();
+
+    if (!user) {
+      return {
+        ok: false as const,
+        reason: "target_user_not_found",
+      };
+    }
+
+    return {
+      ok: true as const,
+      userId: text(user.userId),
+      username: text(user.username),
+      photoUrl: text(user.photoUrl),
+    };
+  }
+
+  /*
+    لو الفرونت أرسل الاسم فقط.
+  */
+  if (!targetUsername) {
+    return {
+      ok: false as const,
+      reason: "target_username_required",
+    };
+  }
+
+  const users = await UserModel.find({
+    username: {
+      $regex: `^${escapeRegExp(targetUsername)}$`,
+      $options: "i",
+    },
+  })
+    .select("userId username photoUrl")
+    .limit(2)
+    .lean();
+
+  if (users.length === 0) {
+    return {
+      ok: false as const,
+      reason: "target_user_not_found",
+    };
+  }
+
+  if (users.length > 1) {
+    return {
+      ok: false as const,
+      reason: "target_username_duplicated",
+    };
+  }
+
+  const user: any = users[0];
+
+  return {
+    ok: true as const,
+    userId: text(user.userId),
+    username: text(user.username),
+    photoUrl: text(user.photoUrl),
+  };
 }
 
 function logStart(name: string, context: any) {
@@ -718,11 +796,16 @@ const handleRoomRoleSet: WsHandler = async (context) => {
 
     const roomId = text(context.message.roomId || context.message.room_id);
 
-    const targetUserId = text(
+    /*
+      الجديد:
+      ممكن الفرونت يرسل targetUsername فقط بدون targetUserId.
+      والباك يبحث عن المستخدم من UserModel.
+    */
+    const rawTargetUserId = text(
       context.message.targetUserId || context.message.target_user_id
     );
 
-    const targetUsername = text(
+    const rawTargetUsername = text(
       context.message.targetUsername || context.message.target_username
     );
 
@@ -742,17 +825,25 @@ const handleRoomRoleSet: WsHandler = async (context) => {
       return;
     }
 
-    if (!targetUserId) {
+    const resolvedTarget = await resolveTargetUser({
+      targetUserId: rawTargetUserId,
+      targetUsername: rawTargetUsername,
+    });
+
+    if (!resolvedTarget.ok) {
       sendError(
         context.socket,
         WS_EVENTS.ROOM_UPDATE_EVENT,
-        "target_user_id_required",
+        resolvedTarget.reason,
         context.message.request_id
       );
 
       logEnd(logName);
       return;
     }
+
+    const targetUserId = resolvedTarget.userId;
+    const targetUsername = resolvedTarget.username;
 
     const result = await setRoomRoleService({
       actorId,
@@ -781,7 +872,9 @@ const handleRoomRoleSet: WsHandler = async (context) => {
 
     /*
       تحديث الرتبة داخل اللايف memory
-      حتى تظهر النجمة فورًا بدون خروج ودخول.
+      لو المستخدم موجود داخل الغرفة الآن.
+      لو خارج الغرفة، الرتبة تحفظ في MongoDB فقط،
+      وستظهر عند دخوله لاحقًا.
     */
     updateRoomUserRole({
       roomId,
@@ -797,11 +890,6 @@ const handleRoomRoleSet: WsHandler = async (context) => {
     const activeUsers = getActiveUsers(roomId);
     const activeCount = activeUsers.length;
 
-    /*
-      هذا ACK للمرسل فقط.
-      لا تستخدمه في الفرونت كرسالة شات.
-      يستخدم لتحديث الحالة فقط لو احتجت.
-    */
     sendSuccess(context.socket, {
       handler: WS_EVENTS.ROOM_UPDATE_EVENT,
       type: "role",
@@ -814,9 +902,6 @@ const handleRoomRoleSet: WsHandler = async (context) => {
       newRole: result.newRole,
     });
 
-    /*
-      تحديث قائمة المستخدمين والنجمة لكل الموجودين.
-    */
     broadcastToRoomUsers(roomId, {
       handler: ROOM_USERS_EVENT,
       type: "users",
@@ -826,10 +911,6 @@ const handleRoomRoleSet: WsHandler = async (context) => {
       activeCount,
     });
 
-    /*
-      الرسالة الوحيدة التي تظهر في الشات.
-      تصل للجميع بنفس الشكل مثل رسائل الدخول والخروج.
-    */
     broadcastToRoomUsers(roomId, {
       handler: ROOM_MESSAGE_EVENT,
       type: "message",
@@ -986,27 +1067,27 @@ const handleRoomJoin: WsHandler = async (context) => {
 
     console.log(`[${logName}] service result:`, result);
 
-if (!result.ok) {
-  const reason = text(result.reason);
+    if (!result.ok) {
+      const reason = text(result.reason);
 
-  const errorMessage =
-    reason === "room_banned" ||
-    reason === "ROOM_BANNED" ||
-    reason === "banned" ||
-    reason === "BANNED"
-      ? "أنت محظور من هذه الغرفة"
-      : result.reason;
+      const errorMessage =
+        reason === "room_banned" ||
+          reason === "ROOM_BANNED" ||
+          reason === "banned" ||
+          reason === "BANNED"
+          ? "أنت محظور من هذه الغرفة"
+          : result.reason;
 
-  sendError(
-    context.socket,
-    WS_EVENTS.ROOM_JOIN_EVENT,
-    errorMessage,
-    context.message.request_id
-  );
+      sendError(
+        context.socket,
+        WS_EVENTS.ROOM_JOIN_EVENT,
+        errorMessage,
+        context.message.request_id
+      );
 
-  logEnd(logName);
-  return;
-}
+      logEnd(logName);
+      return;
+    }
 
     const activeUsers = getActiveUsers(roomId);
     const activeCount = activeUsers.length;
@@ -1015,19 +1096,19 @@ if (!result.ok) {
     const currentUser = currentLiveUser
       ? normalizeActiveUser(currentLiveUser)
       : {
-          userId,
-          username,
-          photoUrl,
-          socketId,
-          joinedAt: "",
-          dc: false,
-          role: result.role || "none",
-          accountColor: "",
-          badgeKey: "",
-          badgeName: "",
-          badgeValue: "",
-          verificationType: "none",
-        };
+        userId,
+        username,
+        photoUrl,
+        socketId,
+        joinedAt: "",
+        dc: false,
+        role: result.role || "none",
+        accountColor: "",
+        badgeKey: "",
+        badgeName: "",
+        badgeValue: "",
+        verificationType: "none",
+      };
 
     sendSuccess(context.socket, {
       handler: WS_EVENTS.ROOM_JOIN_EVENT,
@@ -1139,19 +1220,19 @@ const handleRoomLeave: WsHandler = async (context) => {
     const userBeforeLeave = liveUserBeforeLeave
       ? normalizeActiveUser(liveUserBeforeLeave)
       : {
-          userId,
-          username,
-          photoUrl,
-          socketId: "",
-          joinedAt: "",
-          dc: false,
-          role: "none",
-          accountColor: "",
-          badgeKey: "",
-          badgeName: "",
-          badgeValue: "",
-          verificationType: "none",
-        };
+        userId,
+        username,
+        photoUrl,
+        socketId: "",
+        joinedAt: "",
+        dc: false,
+        role: "none",
+        accountColor: "",
+        badgeKey: "",
+        badgeName: "",
+        badgeValue: "",
+        verificationType: "none",
+      };
 
     const result = await leaveRoomService({
       userId,
@@ -1328,22 +1409,44 @@ const handleRoomMessageSend: WsHandler = async (context) => {
       logEnd(logName);
       return;
     }
-const userStillInRoom = isUserInRoom({
-  roomId,
-  userId,
-});
+    const mediaBase64 = text(
+  context.message.mediaBase64 || context.message.media_base64
+);
 
-if (!userStillInRoom) {
+const hasMediaObject = !!context.message.media;
+const hasMediaBase64 = mediaBase64.startsWith("data:");
+
+if (
+  type !== "text" &&
+  !hasMediaObject &&
+  !hasMediaBase64
+) {
   sendError(
     context.socket,
     WS_EVENTS.ROOM_MESSAGE_SEND_EVENT,
-    "room_not_joined",
+    "missing_media",
     context.message.request_id
   );
 
   logEnd(logName);
   return;
 }
+    const userStillInRoom = isUserInRoom({
+      roomId,
+      userId,
+    });
+
+    if (!userStillInRoom) {
+      sendError(
+        context.socket,
+        WS_EVENTS.ROOM_MESSAGE_SEND_EVENT,
+        "room_not_joined",
+        context.message.request_id
+      );
+
+      logEnd(logName);
+      return;
+    }
     const result = await sendRoomLiveMessageService({
       userId,
       username,
@@ -1351,10 +1454,17 @@ if (!userStillInRoom) {
       roomId,
       type,
       text: context.message.text,
+
       media: context.message.media,
+
+      mediaBase64: context.message.mediaBase64 || context.message.media_base64,
+      fileName: context.message.fileName || context.message.file_name,
+      mimeType: context.message.mimeType || context.message.mime_type,
+      sizeBytes: Number(context.message.sizeBytes || context.message.size_bytes || 0),
+      duration: context.message.duration,
+
       replyTo: context.message.replyTo || context.message.reply_to,
     });
-
     console.log(`[${logName}] service result:`, result);
 
     if (!result.ok) {
@@ -1572,12 +1682,12 @@ const handleRoomLockSet: WsHandler = async (context) => {
       String(room.creatorId) === actorId
         ? "creator"
         : room.owners.includes(actorId)
-        ? "owner"
-        : room.admins.includes(actorId)
-        ? "admin"
-        : room.members.includes(actorId)
-        ? "member"
-        : "none";
+          ? "owner"
+          : room.admins.includes(actorId)
+            ? "admin"
+            : room.members.includes(actorId)
+              ? "member"
+              : "none";
 
     if (
       actorRole !== "creator" &&
@@ -1691,12 +1801,12 @@ const handleRoomPasswordSet: WsHandler = async (context) => {
       String(room.creatorId) === actorId
         ? "creator"
         : room.owners.includes(actorId)
-        ? "owner"
-        : room.admins.includes(actorId)
-        ? "admin"
-        : room.members.includes(actorId)
-        ? "member"
-        : "none";
+          ? "owner"
+          : room.admins.includes(actorId)
+            ? "admin"
+            : room.members.includes(actorId)
+              ? "member"
+              : "none";
 
     if (
       actorRole !== "creator" &&
@@ -1803,12 +1913,12 @@ const handleRoomPinSet: WsHandler = async (context) => {
       String(room.creatorId) === actorId
         ? "creator"
         : room.owners.includes(actorId)
-        ? "owner"
-        : room.admins.includes(actorId)
-        ? "admin"
-        : room.members.includes(actorId)
-        ? "member"
-        : "none";
+          ? "owner"
+          : room.admins.includes(actorId)
+            ? "admin"
+            : room.members.includes(actorId)
+              ? "member"
+              : "none";
 
     if (
       actorRole !== "creator" &&
@@ -2181,11 +2291,11 @@ export const roomHandlers = {
 
   [WS_HANDLERS.ROOM_KICK]: handleRoomKick,
   [WS_HANDLERS.ROOM_BAN]: handleRoomBan,
-    [WS_HANDLERS.ROOM_SET_PASSWORD]: handleRoomPasswordSet,
+  [WS_HANDLERS.ROOM_SET_PASSWORD]: handleRoomPasswordSet,
   [WS_HANDLERS.ROOM_LOCK_SET]: handleRoomLockSet,
   [WS_HANDLERS.ROOM_PIN_SET]: handleRoomPinSet,
   [WS_HANDLERS.ROOM_ROLES_LIST]: handleRoomRolesList,
-[WS_HANDLERS.ROOM_ROLE_REMOVE]: handleRoomRoleRemove,
-[WS_HANDLERS.ROOM_LOGS_LIST]: handleRoomLogsList,
-[WS_HANDLERS.ROOM_BANNED_LIST]: handleRoomBannedList,
+  [WS_HANDLERS.ROOM_ROLE_REMOVE]: handleRoomRoleRemove,
+  [WS_HANDLERS.ROOM_LOGS_LIST]: handleRoomLogsList,
+  [WS_HANDLERS.ROOM_BANNED_LIST]: handleRoomBannedList,
 };

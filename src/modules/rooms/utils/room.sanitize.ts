@@ -145,7 +145,9 @@ export function sanitizeRoomListType(value: any): RoomListType {
 export function sanitizeRoomUserMessageType(value: any): RoomUserMessageType {
   const type = cleanText(value).toLowerCase();
 
-  if (type === "text" || type === "image" || type === "gif" || type === "video") {
+  if (type === "text" || type === "image" || type === "gif" || type === "video"||
+    type === "audio" ||
+    type === "voice") {
     return type;
   }
 
@@ -163,6 +165,8 @@ export function sanitizeRoomLiveMessageType(value: any): RoomLiveMessageType {
     type === "image" ||
     type === "gif" ||
     type === "video" ||
+    type === "audio" ||
+    type === "voice" ||
     type === "gift" ||
     type === "none"
   ) {
@@ -171,7 +175,6 @@ export function sanitizeRoomLiveMessageType(value: any): RoomLiveMessageType {
 
   return "none";
 }
-
 /*
   تنظيف ID عام.
 */
@@ -227,12 +230,13 @@ export function sanitizeRoomMedia(value: any) {
 
   return {
     url,
+    publicId: cleanText(value.publicId || value.public_id),
     fileName: limitText(value.fileName || value.file_name, 160),
     mimeType: limitText(value.mimeType || value.mime_type, 80),
     sizeBytes: sanitizeSizeBytes(value.sizeBytes || value.size_bytes),
+    duration: cleanText(value.duration),
   };
 }
-
 /*
   تنظيف replyTo القادم من Flutter.
 */

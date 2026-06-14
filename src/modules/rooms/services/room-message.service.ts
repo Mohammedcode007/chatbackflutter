@@ -1,6 +1,6 @@
 import { RoomModel } from "../models/Room.model";
 import { UserModel } from "../../../models/User.model";
-
+import { v2 as cloudinary } from "cloudinary";
 import {
   RoomGiftPayload,
   RoomLiveMessage,
@@ -37,7 +37,53 @@ function clean(value: any) {
 function nowIso() {
   return new Date().toISOString();
 }
+function isBase64Media(value: any) {
+  const text = clean(value);
 
+  return text.startsWith("data:") && text.includes(";base64,");
+}
+
+function cloudinaryResourceType(type: string) {
+  const cleanType = clean(type).toLowerCase();
+
+  if (cleanType === "audio" || cleanType === "voice" || cleanType === "video") {
+    return "video";
+  }
+
+  return "image";
+}
+
+async function uploadRoomMediaBase64ToCloudinary(input: {
+  roomId: string;
+  type: string;
+  mediaBase64: string;
+  fileName?: string;
+  mimeType?: string;
+  sizeBytes?: number;
+  duration?: string;
+}) {
+  const roomId = sanitizeRoomId(input.roomId);
+  const type = clean(input.type).toLowerCase();
+  const mediaBase64 = clean(input.mediaBase64);
+
+  if (!roomId || !type || !isBase64Media(mediaBase64)) {
+    return null;
+  }
+
+  const result = await cloudinary.uploader.upload(mediaBase64, {
+    folder: `bimo/rooms/${roomId}`,
+    resource_type: cloudinaryResourceType(type),
+  });
+
+  return {
+    url: result.secure_url,
+    publicId: result.public_id,
+    fileName: clean(input.fileName),
+    mimeType: clean(input.mimeType),
+    sizeBytes: Number(input.sizeBytes || 0),
+    duration: clean(input.duration),
+  };
+}
 /*
   هذا الملف لا يحفظ رسائل الغرفة.
   كل الرسائل Live فقط وترسل من الـ handler عن طريق socket broadcast.
@@ -64,6 +110,13 @@ export async function sendRoomLiveMessageService(input: {
   text?: string;
 
   media?: any;
+
+  mediaBase64?: string;
+  fileName?: string;
+  mimeType?: string;
+  sizeBytes?: number;
+  duration?: string;
+
   replyTo?: any;
 }) {
   const userId = sanitizeUserId(input.userId);
@@ -103,8 +156,23 @@ export async function sendRoomLiveMessageService(input: {
     };
   }
 
-  const media = sanitizeRoomMedia(input.media);
-  const replyTo = sanitizeRoomReply(input.replyTo);
+ let media = sanitizeRoomMedia(input.media);
+
+const hasBase64Media = isBase64Media(input.mediaBase64);
+
+if (!media && hasBase64Media) {
+  media = await uploadRoomMediaBase64ToCloudinary({
+    roomId,
+    type,
+    mediaBase64: clean(input.mediaBase64),
+    fileName: input.fileName,
+    mimeType: input.mimeType,
+    sizeBytes: input.sizeBytes,
+    duration: input.duration,
+  });
+}
+
+const replyTo = sanitizeRoomReply(input.replyTo);
 
   if (type === "text" && !text) {
     return {
@@ -113,13 +181,19 @@ export async function sendRoomLiveMessageService(input: {
     };
   }
 
-  if ((type === "image" || type === "gif" || type === "video") && !media) {
-    return {
-      ok: false as const,
-      reason: "missing_media",
-    };
-  }
-
+if (
+  (type === "image" ||
+    type === "gif" ||
+    type === "video" ||
+    type === "audio" ||
+    type === "voice") &&
+  !media
+) {
+  return {
+    ok: false as const,
+    reason: "missing_media",
+  };
+}
   /*
     @username msg
     لو النص يبدأ بمنشن، نرجع mentionDm للـ handler.

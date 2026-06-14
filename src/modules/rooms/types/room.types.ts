@@ -37,7 +37,11 @@ export type RoomUserMessageType =
   | "text"
   | "image"
   | "gif"
-  | "video";
+  | "video"
+  | "audio"
+  | "voice"
+  | "gift"
+  | "none";
 
 /*
   نوع عام للرسالة اللايف.
@@ -48,6 +52,8 @@ export type RoomLiveMessageType =
   | "gif"
   | "video"
   | "gift"
+   | "audio"
+  | "voice"
   | "none";
 
 /*
