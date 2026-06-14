@@ -161,20 +161,19 @@ export async function joinRoomService(input: {
     لو الغرفة مقفولة للـ members فقط:
     none ممنوع يدخل.
   */
-  if (room.isLockedForNone && role === "none") {
-    console.log("[joinRoomService] failed: room_locked_for_members_only", {
-      userId,
-      roomId,
-      role,
-    });
-    console.log("===== joinRoomService END =====\n");
+if (room.isLockedForNone && role === "none") {
+  console.log("[joinRoomService] failed: room_locked_for_none", {
+    userId,
+    roomId,
+    role,
+  });
+  console.log("===== joinRoomService END =====\n");
 
-    return {
-      ok: false as const,
-      reason: "room_locked_for_members_only",
-    };
-  }
-
+  return {
+    ok: false as const,
+    reason: "room_locked_for_none",
+  };
+}
   /*
     أقصى عدد 50 مستخدم live.
     لو نفس المستخدم موجود بالفعل لا نمنعه بسبب الحد.
@@ -428,13 +427,12 @@ export async function canJoinRoomService(input: {
 
   const role = getRoomRole(room, userId);
 
-  if (room.isLockedForNone && role === "none") {
-    return {
-      ok: false as const,
-      reason: "room_locked_for_members_only",
-    };
-  }
-
+if (room.isLockedForNone && role === "none") {
+  return {
+    ok: false as const,
+    reason: "room_locked_for_none",
+  };
+}
   if (room.hasPassword && role !== "creator") {
     const ok = await bcrypt.compare(password, room.passwordHash || "");
 

@@ -9,7 +9,11 @@ import {
   removeUserFromSpecificRoom,
 } from "../../../websocket/stores/roomClients.store";
 import { WS_EVENTS, WS_HANDLERS } from "../../../websocket/ws.events";
-
+import {
+  listRoomUsersByRoleService,
+  listRoomLogsService,
+  listRoomBannedService,
+} from "../services/room-admin-query.service";
 import { setRoomRoleService } from "../services/room-role.service";
 import { createRoomService } from "../services/room-create.service";
 import { joinRoomService, leaveRoomService } from "../services/room-join.service";
@@ -22,6 +26,7 @@ import {
   kickUserFromRoomService,
   banUserFromRoomService,
 } from "../services/room-ban.service";
+import { RoomModel } from "../models/Room.model";
 const ROOM_MESSAGE_EVENT = "room.message";
 const ROOM_USERS_EVENT = "room.users";
 const ROOM_ACTIVE_COUNT_EVENT = "room.active_count.update";
@@ -1521,7 +1526,649 @@ const handleRoomBoost: WsHandler = async (context) => {
     logEnd(logName);
   }
 };
+const handleRoomLockSet: WsHandler = async (context) => {
+  const logName = "ROOM_LOCK_SET_HANDLER";
 
+  try {
+    logStart(logName, context);
+
+    if (!requireLogin(context, WS_EVENTS.ROOM_UPDATE_EVENT)) {
+      console.log(`[${logName}] requireLogin failed`);
+      logEnd(logName);
+      return;
+    }
+
+    const actorId = context.client!.userId!;
+    const roomId = text(context.message.roomId || context.message.room_id);
+    const locked = boolValue(context.message.locked);
+
+    if (!roomId) {
+      sendError(
+        context.socket,
+        WS_EVENTS.ROOM_UPDATE_EVENT,
+        "room_id_required",
+        context.message.request_id
+      );
+
+      logEnd(logName);
+      return;
+    }
+
+    const room = await RoomModel.findOne({ roomId });
+
+    if (!room) {
+      sendError(
+        context.socket,
+        WS_EVENTS.ROOM_UPDATE_EVENT,
+        "room_not_found",
+        context.message.request_id
+      );
+
+      logEnd(logName);
+      return;
+    }
+
+    const actorRole =
+      String(room.creatorId) === actorId
+        ? "creator"
+        : room.owners.includes(actorId)
+        ? "owner"
+        : room.admins.includes(actorId)
+        ? "admin"
+        : room.members.includes(actorId)
+        ? "member"
+        : "none";
+
+    if (
+      actorRole !== "creator" &&
+      actorRole !== "owner" &&
+      actorRole !== "admin"
+    ) {
+      sendError(
+        context.socket,
+        WS_EVENTS.ROOM_UPDATE_EVENT,
+        "permission_denied",
+        context.message.request_id
+      );
+
+      logEnd(logName);
+      return;
+    }
+
+    room.isLockedForNone = locked;
+    await room.save();
+
+    const activeUsers = getActiveUsers(roomId);
+    const activeCount = activeUsers.length;
+
+    sendSuccess(context.socket, {
+      handler: WS_EVENTS.ROOM_UPDATE_EVENT,
+      type: "lock",
+      request_id: context.message.request_id,
+      roomId,
+      locked,
+      isLockedForNone: locked,
+      activeCount,
+      activeUsers,
+      room: {
+        roomId: room.roomId,
+        isLockedForNone: room.isLockedForNone,
+      },
+    });
+
+    broadcastToRoomUsers(roomId, {
+      handler: WS_EVENTS.ROOM_UPDATE_EVENT,
+      type: "lock",
+      roomId,
+      locked,
+      isLockedForNone: locked,
+      activeCount,
+      activeUsers,
+      room: {
+        roomId: room.roomId,
+        isLockedForNone: room.isLockedForNone,
+      },
+    });
+
+    logEnd(logName);
+  } catch (error) {
+    console.error(`[${logName}] unexpected error:`, error);
+
+    sendError(
+      context.socket,
+      WS_EVENTS.ROOM_UPDATE_EVENT,
+      "room_lock_set_failed",
+      context.message.request_id
+    );
+
+    logEnd(logName);
+  }
+};
+
+const handleRoomPasswordSet: WsHandler = async (context) => {
+  const logName = "ROOM_PASSWORD_SET_HANDLER";
+
+  try {
+    logStart(logName, context);
+
+    if (!requireLogin(context, WS_EVENTS.ROOM_UPDATE_EVENT)) {
+      console.log(`[${logName}] requireLogin failed`);
+      logEnd(logName);
+      return;
+    }
+
+    const actorId = context.client!.userId!;
+    const roomId = text(context.message.roomId || context.message.room_id);
+    const password = text(context.message.password);
+
+    if (!roomId) {
+      sendError(
+        context.socket,
+        WS_EVENTS.ROOM_UPDATE_EVENT,
+        "room_id_required",
+        context.message.request_id
+      );
+
+      logEnd(logName);
+      return;
+    }
+
+    const room = await RoomModel.findOne({ roomId });
+
+    if (!room) {
+      sendError(
+        context.socket,
+        WS_EVENTS.ROOM_UPDATE_EVENT,
+        "room_not_found",
+        context.message.request_id
+      );
+
+      logEnd(logName);
+      return;
+    }
+
+    const actorRole =
+      String(room.creatorId) === actorId
+        ? "creator"
+        : room.owners.includes(actorId)
+        ? "owner"
+        : room.admins.includes(actorId)
+        ? "admin"
+        : room.members.includes(actorId)
+        ? "member"
+        : "none";
+
+    if (
+      actorRole !== "creator" &&
+      actorRole !== "owner" &&
+      actorRole !== "admin"
+    ) {
+      sendError(
+        context.socket,
+        WS_EVENTS.ROOM_UPDATE_EVENT,
+        "permission_denied",
+        context.message.request_id
+      );
+
+      logEnd(logName);
+      return;
+    }
+
+    room.passwordHash = password;
+    room.hasPassword = password.length > 0;
+
+    await room.save();
+
+    sendSuccess(context.socket, {
+      handler: WS_EVENTS.ROOM_UPDATE_EVENT,
+      type: "password",
+      request_id: context.message.request_id,
+      roomId,
+      hasPassword: room.hasPassword,
+      room: {
+        roomId: room.roomId,
+        hasPassword: room.hasPassword,
+      },
+    });
+
+    broadcastToRoomUsers(roomId, {
+      handler: WS_EVENTS.ROOM_UPDATE_EVENT,
+      type: "password",
+      roomId,
+      hasPassword: room.hasPassword,
+      room: {
+        roomId: room.roomId,
+        hasPassword: room.hasPassword,
+      },
+    });
+
+    logEnd(logName);
+  } catch (error) {
+    console.error(`[${logName}] unexpected error:`, error);
+
+    sendError(
+      context.socket,
+      WS_EVENTS.ROOM_UPDATE_EVENT,
+      "room_password_set_failed",
+      context.message.request_id
+    );
+
+    logEnd(logName);
+  }
+};
+
+const handleRoomPinSet: WsHandler = async (context) => {
+  const logName = "ROOM_PIN_SET_HANDLER";
+
+  try {
+    logStart(logName, context);
+
+    if (!requireLogin(context, WS_EVENTS.ROOM_UPDATE_EVENT)) {
+      console.log(`[${logName}] requireLogin failed`);
+      logEnd(logName);
+      return;
+    }
+
+    const actorId = context.client!.userId!;
+    const roomId = text(context.message.roomId || context.message.room_id);
+    const pinText = text(context.message.text);
+
+    if (!roomId) {
+      sendError(
+        context.socket,
+        WS_EVENTS.ROOM_UPDATE_EVENT,
+        "room_id_required",
+        context.message.request_id
+      );
+
+      logEnd(logName);
+      return;
+    }
+
+    const room = await RoomModel.findOne({ roomId });
+
+    if (!room) {
+      sendError(
+        context.socket,
+        WS_EVENTS.ROOM_UPDATE_EVENT,
+        "room_not_found",
+        context.message.request_id
+      );
+
+      logEnd(logName);
+      return;
+    }
+
+    const actorRole =
+      String(room.creatorId) === actorId
+        ? "creator"
+        : room.owners.includes(actorId)
+        ? "owner"
+        : room.admins.includes(actorId)
+        ? "admin"
+        : room.members.includes(actorId)
+        ? "member"
+        : "none";
+
+    if (
+      actorRole !== "creator" &&
+      actorRole !== "owner" &&
+      actorRole !== "admin"
+    ) {
+      sendError(
+        context.socket,
+        WS_EVENTS.ROOM_UPDATE_EVENT,
+        "permission_denied",
+        context.message.request_id
+      );
+
+      logEnd(logName);
+      return;
+    }
+
+    room.pinnedMessage = {
+      text: pinText,
+      updatedBy: actorId,
+      updatedAt: new Date(),
+    };
+
+    await room.save();
+
+    sendSuccess(context.socket, {
+      handler: WS_EVENTS.ROOM_UPDATE_EVENT,
+      type: "pin",
+      request_id: context.message.request_id,
+      roomId,
+      pinnedMessage: room.pinnedMessage,
+      room: {
+        roomId: room.roomId,
+        pinnedMessage: room.pinnedMessage,
+      },
+    });
+
+    broadcastToRoomUsers(roomId, {
+      handler: WS_EVENTS.ROOM_UPDATE_EVENT,
+      type: "pin",
+      roomId,
+      pinnedMessage: room.pinnedMessage,
+      room: {
+        roomId: room.roomId,
+        pinnedMessage: room.pinnedMessage,
+      },
+    });
+
+    logEnd(logName);
+  } catch (error) {
+    console.error(`[${logName}] unexpected error:`, error);
+
+    sendError(
+      context.socket,
+      WS_EVENTS.ROOM_UPDATE_EVENT,
+      "room_pin_set_failed",
+      context.message.request_id
+    );
+
+    logEnd(logName);
+  }
+};
+const handleRoomRolesList: WsHandler = async (context) => {
+  const logName = "ROOM_ROLES_LIST_HANDLER";
+
+  try {
+    logStart(logName, context);
+
+    if (!requireLogin(context, WS_EVENTS.ROOM_UPDATE_EVENT)) {
+      logEnd(logName);
+      return;
+    }
+
+    const actorId = context.client!.userId!;
+    const roomId = text(context.message.roomId || context.message.room_id);
+    const role = text(context.message.role);
+
+    const result = await listRoomUsersByRoleService({
+      actorId,
+      roomId,
+      role,
+    });
+
+    if (!result.ok) {
+      sendError(
+        context.socket,
+        WS_EVENTS.ROOM_UPDATE_EVENT,
+        result.reason,
+        context.message.request_id
+      );
+
+      logEnd(logName);
+      return;
+    }
+
+    sendSuccess(context.socket, {
+      handler: WS_EVENTS.ROOM_UPDATE_EVENT,
+      type: "roles_list",
+      request_id: context.message.request_id,
+      roomId: result.roomId,
+      role: result.role,
+      users: result.users,
+      count: result.count,
+    });
+
+    logEnd(logName);
+  } catch (error) {
+    console.error(`[${logName}] unexpected error:`, error);
+
+    sendError(
+      context.socket,
+      WS_EVENTS.ROOM_UPDATE_EVENT,
+      "room_roles_list_failed",
+      context.message.request_id
+    );
+
+    logEnd(logName);
+  }
+};
+const handleRoomLogsList: WsHandler = async (context) => {
+  const logName = "ROOM_LOGS_LIST_HANDLER";
+
+  try {
+    logStart(logName, context);
+
+    if (!requireLogin(context, WS_EVENTS.ROOM_UPDATE_EVENT)) {
+      logEnd(logName);
+      return;
+    }
+
+    const actorId = context.client!.userId!;
+    const roomId = text(context.message.roomId || context.message.room_id);
+    const limit = Number(context.message.limit || 50);
+
+    const result = await listRoomLogsService({
+      actorId,
+      roomId,
+      limit,
+    });
+
+    if (!result.ok) {
+      sendError(
+        context.socket,
+        WS_EVENTS.ROOM_UPDATE_EVENT,
+        result.reason,
+        context.message.request_id
+      );
+
+      logEnd(logName);
+      return;
+    }
+
+    sendSuccess(context.socket, {
+      handler: WS_EVENTS.ROOM_UPDATE_EVENT,
+      type: "logs",
+      request_id: context.message.request_id,
+      roomId: result.roomId,
+      logs: result.logs,
+    });
+
+    logEnd(logName);
+  } catch (error) {
+    console.error(`[${logName}] unexpected error:`, error);
+
+    sendError(
+      context.socket,
+      WS_EVENTS.ROOM_UPDATE_EVENT,
+      "room_logs_list_failed",
+      context.message.request_id
+    );
+
+    logEnd(logName);
+  }
+};
+const handleRoomBannedList: WsHandler = async (context) => {
+  const logName = "ROOM_BANNED_LIST_HANDLER";
+
+  try {
+    logStart(logName, context);
+
+    if (!requireLogin(context, WS_EVENTS.ROOM_UPDATE_EVENT)) {
+      logEnd(logName);
+      return;
+    }
+
+    const actorId = context.client!.userId!;
+    const roomId = text(context.message.roomId || context.message.room_id);
+
+    const result = await listRoomBannedService({
+      actorId,
+      roomId,
+    });
+
+    if (!result.ok) {
+      sendError(
+        context.socket,
+        WS_EVENTS.ROOM_UPDATE_EVENT,
+        result.reason,
+        context.message.request_id
+      );
+
+      logEnd(logName);
+      return;
+    }
+
+    sendSuccess(context.socket, {
+      handler: WS_EVENTS.ROOM_UPDATE_EVENT,
+      type: "banned_list",
+      request_id: context.message.request_id,
+      roomId: result.roomId,
+      bannedUsers: result.bannedUsers,
+      bannedIps: result.bannedIps,
+    });
+
+    logEnd(logName);
+  } catch (error) {
+    console.error(`[${logName}] unexpected error:`, error);
+
+    sendError(
+      context.socket,
+      WS_EVENTS.ROOM_UPDATE_EVENT,
+      "room_banned_list_failed",
+      context.message.request_id
+    );
+
+    logEnd(logName);
+  }
+};
+const handleRoomRoleRemove: WsHandler = async (context) => {
+  const logName = "ROOM_ROLE_REMOVE_HANDLER";
+
+  try {
+    logStart(logName, context);
+
+    if (!requireLogin(context, WS_EVENTS.ROOM_UPDATE_EVENT)) {
+      logEnd(logName);
+      return;
+    }
+
+    const actorId = context.client!.userId!;
+    const actorUsername = text(context.client?.username);
+
+    const roomId = text(context.message.roomId || context.message.room_id);
+
+    const targetUserId = text(
+      context.message.targetUserId || context.message.target_user_id
+    );
+
+    const targetUsername = text(
+      context.message.targetUsername || context.message.target_username
+    );
+
+    if (!roomId) {
+      sendError(
+        context.socket,
+        WS_EVENTS.ROOM_UPDATE_EVENT,
+        "room_id_required",
+        context.message.request_id
+      );
+
+      logEnd(logName);
+      return;
+    }
+
+    if (!targetUserId) {
+      sendError(
+        context.socket,
+        WS_EVENTS.ROOM_UPDATE_EVENT,
+        "target_user_id_required",
+        context.message.request_id
+      );
+
+      logEnd(logName);
+      return;
+    }
+
+    const result = await setRoomRoleService({
+      actorId,
+      actorUsername,
+      targetUserId,
+      targetUsername,
+      roomId,
+      newRole: "none" as any,
+    });
+
+    if (!result.ok) {
+      sendError(
+        context.socket,
+        WS_EVENTS.ROOM_UPDATE_EVENT,
+        result.reason,
+        context.message.request_id
+      );
+
+      logEnd(logName);
+      return;
+    }
+
+    updateRoomUserRole({
+      roomId,
+      userId: targetUserId,
+      role: "none",
+    });
+
+    const targetLiveUser = getRoomLiveUser(roomId, targetUserId);
+
+    const finalTargetUsername =
+      targetUsername || text((targetLiveUser as any)?.username) || targetUserId;
+
+    const activeUsers = getActiveUsers(roomId);
+    const activeCount = activeUsers.length;
+
+    sendSuccess(context.socket, {
+      handler: WS_EVENTS.ROOM_UPDATE_EVENT,
+      type: "role_remove",
+      request_id: context.message.request_id,
+      roomId,
+      targetUserId,
+      targetUsername: finalTargetUsername,
+      oldRole: result.oldRole,
+      newRole: "none",
+    });
+
+    broadcastToRoomUsers(roomId, {
+      handler: ROOM_USERS_EVENT,
+      type: "users",
+      roomId,
+      users: activeUsers,
+      activeUsers,
+      activeCount,
+    });
+
+    broadcastToRoomUsers(roomId, {
+      handler: ROOM_MESSAGE_EVENT,
+      type: "message",
+      roomId,
+      message: makeRoomRoleMessage({
+        roomId,
+        actorId,
+        actorUsername,
+        targetUserId,
+        targetUsername: finalTargetUsername,
+        oldRole: result.oldRole,
+        newRole: "none",
+      }),
+    });
+
+    logEnd(logName);
+  } catch (error) {
+    console.error(`[${logName}] unexpected error:`, error);
+
+    sendError(
+      context.socket,
+      WS_EVENTS.ROOM_UPDATE_EVENT,
+      "room_role_remove_failed",
+      context.message.request_id
+    );
+
+    logEnd(logName);
+  }
+};
 export const roomHandlers = {
   [WS_HANDLERS.ROOM_CREATE]: handleRoomCreate,
   [WS_HANDLERS.ROOM_JOIN]: handleRoomJoin,
@@ -1534,4 +2181,11 @@ export const roomHandlers = {
 
   [WS_HANDLERS.ROOM_KICK]: handleRoomKick,
   [WS_HANDLERS.ROOM_BAN]: handleRoomBan,
+    [WS_HANDLERS.ROOM_SET_PASSWORD]: handleRoomPasswordSet,
+  [WS_HANDLERS.ROOM_LOCK_SET]: handleRoomLockSet,
+  [WS_HANDLERS.ROOM_PIN_SET]: handleRoomPinSet,
+  [WS_HANDLERS.ROOM_ROLES_LIST]: handleRoomRolesList,
+[WS_HANDLERS.ROOM_ROLE_REMOVE]: handleRoomRoleRemove,
+[WS_HANDLERS.ROOM_LOGS_LIST]: handleRoomLogsList,
+[WS_HANDLERS.ROOM_BANNED_LIST]: handleRoomBannedList,
 };

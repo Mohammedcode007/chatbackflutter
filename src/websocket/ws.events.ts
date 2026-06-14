@@ -76,6 +76,13 @@ export const WS_HANDLERS = {
 
   ROOM_ROLE_SET: "room.role.set",
 
+// الجديد: جلب الرتب وحذف الرتبة
+ROOM_ROLES_LIST: "room.roles.list",
+ROOM_ROLE_REMOVE: "room.role.remove",
+
+// الجديد: جلب لوجات الغرفة والمحظورين
+ROOM_LOGS_LIST: "room.logs.list",
+ROOM_BANNED_LIST: "room.banned.list",
   /*
     الجديد للطرد والحظر.
   */
