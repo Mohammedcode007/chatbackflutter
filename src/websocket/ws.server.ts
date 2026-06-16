@@ -242,24 +242,47 @@ export function initWebSocketServer(server: HttpServer) {
         client.lastSeenAt = new Date();
       }
 
-      const message = parseWsMessage(raw);
+   const message = parseWsMessage(raw);
 
-      if (!message) {
-        sendError(
-          socket,
-          WS_EVENTS.ERROR_EVENT,
-          "invalid_json_or_missing_handler"
-        );
-        return;
-      }
+if (!message) {
+  sendError(
+    socket,
+    WS_EVENTS.ERROR_EVENT,
+    "invalid_json_or_missing_handler"
+  );
+  return;
+}
 
-      try {
-        await dispatchWsMessage({
-          socket,
-          message,
-          client,
-        });
-      } catch (error: any) {
+/*
+  Ping من Flutter.
+  هذا غير socket.ping() الخاص بالـ ws protocol.
+  Flutter يرسل JSON handler=ping، فنرد عليه بـ pong.
+*/
+if (message.handler === "ping") {
+  if (client) {
+    client.isAlive = true;
+    client.lastSeenAt = new Date();
+  }
+
+  safeSend(socket, {
+    handler: "pong",
+    type: "pong",
+    reason: "null",
+    message: "alive",
+    time: new Date().toISOString(),
+    request_id: message.request_id,
+  });
+
+  return;
+}
+
+try {
+  await dispatchWsMessage({
+    socket,
+    message,
+    client,
+  });
+} catch (error: any) {
         sendError(
           socket,
           WS_EVENTS.ERROR_EVENT,
