@@ -2,6 +2,7 @@ export const WS_HANDLERS = {
   AUTH_LOGIN: "auth.login",
   AUTH_REGISTER: "auth.register",
   AUTH_LOGOUT: "auth.logout",
+  AUTH_RESUME: "auth.resume",
 
   STORE_ITEMS_LIST: "store.items.list",
   STORE_ITEM_BUY: "store.item.buy",
@@ -54,7 +55,6 @@ export const WS_HANDLERS = {
   ROOMS_MESSAGE_SEND: "rooms.message.send",
   ROOMS_USERS_LIST: "rooms.users.list",
 
-  TWEETS_CREATE: "tweets.create",
   TWEETS_LIST: "tweets.list",
   TWEETS_LIKE: "tweets.like",
   TWEETS_COMMENT: "tweets.comment",
@@ -101,6 +101,42 @@ ROOM_BANNED_LIST: "room.banned.list",
 
   ROOM_FAVORITE_TOGGLE: "room.favorite.toggle",
   ROOM_BOOST: "room.boost",
+
+
+
+
+  TWEETS_CREATE:
+  "tweets.create",
+
+TWEETS_DELETE:
+  "tweets.delete",
+
+TWEETS_FEED:
+  "tweets.feed",
+
+TWEETS_DETAILS:
+  "tweets.details",
+
+TWEETS_LIKE_TOGGLE:
+  "tweets.like.toggle",
+
+TWEETS_RETWEET_TOGGLE:
+  "tweets.retweet.toggle",
+
+TWEETS_VIEW:
+  "tweets.view",
+
+TWEETS_COMMENT_CREATE:
+  "tweets.comment.create",
+
+TWEETS_COMMENT_UPDATE:
+  "tweets.comment.update",
+
+TWEETS_COMMENT_DELETE:
+  "tweets.comment.delete",
+
+TWEETS_COMMENTS_LIST:
+  "tweets.comments.list",
 } as const;
 
 export const WS_EVENTS = {
@@ -193,4 +229,38 @@ export const WS_EVENTS = {
   */
   ROOM_KICKED_EVENT: "room:kicked",
   ROOM_BANNED_EVENT: "room:banned",
+
+
+  TWEETS_CREATE_EVENT:
+  "tweets.create_event",
+
+TWEETS_DELETE_EVENT:
+  "tweets.delete_event",
+
+TWEETS_FEED_EVENT:
+  "tweets.feed_event",
+
+TWEETS_DETAILS_EVENT:
+  "tweets.details_event",
+
+TWEETS_LIKE_EVENT:
+  "tweets.like_event",
+
+TWEETS_RETWEET_EVENT:
+  "tweets.retweet_event",
+
+TWEETS_VIEW_EVENT:
+  "tweets.view_event",
+
+TWEETS_COMMENT_EVENT:
+  "tweets.comment_event",
+
+TWEETS_COMMENTS_EVENT:
+  "tweets.comments_event",
+
+TWEETS_ERROR_EVENT:
+  "tweets.error_event",
+
+TWEETS_COOLDOWN_EVENT:
+  "tweets.cooldown_event",
 } as const;

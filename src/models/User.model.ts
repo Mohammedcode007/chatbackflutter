@@ -39,7 +39,8 @@ export type UserDocument = Document & {
 
   photoUrl: string;
   photoPublicId: string;
-
+sessionTokenHash?: string;
+sessionExpiresAt?: Date | null;
   coverUrl: string;
   coverPublicId: string;
 
@@ -162,7 +163,19 @@ const UserSchema = new Schema<UserDocument>(
       type: String,
       required: true,
     },
+sessionTokenHash: {
+  type: String,
+  default: "",
+  select: false,
+  index: true,
+},
 
+sessionExpiresAt: {
+  type: Date,
+  default: null,
+  select: false,
+  index: true,
+},
     points: {
       type: Number,
       default: 100,

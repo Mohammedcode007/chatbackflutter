@@ -1,3 +1,32 @@
+// export type LoginPayload = {
+//   handler: "auth.login" | "login";
+
+//   request_id?: string;
+
+//   username: string;
+//   password: string;
+//   session: string;
+//   sdk: string;
+//   ver: string;
+//   id: string;
+// };
+// export type RegisterPayload = {
+//   handler: "auth.register" | "register";
+//   request_id?: string;
+//   username: string;
+//   password: string;
+//   session: string;
+//   sdk: string;
+//   ver: string;
+//   id: string;
+// };
+
+// export type LogoutPayload = {
+//   handler: "auth.logout" | "logout";
+
+//   request_id?: string;
+// };
+
 export type LoginPayload = {
   handler: "auth.login" | "login";
 
@@ -10,15 +39,38 @@ export type LoginPayload = {
   ver: string;
   id: string;
 };
+
 export type RegisterPayload = {
   handler: "auth.register" | "register";
+
   request_id?: string;
+
   username: string;
   password: string;
   session: string;
   sdk: string;
   ver: string;
   id: string;
+};
+
+export type ResumePayload = {
+  handler: "auth.resume" | "resume";
+
+  request_id?: string;
+
+  /*
+    الرمز المحفوظ داخل التطبيق.
+  */
+  token: string;
+
+  /*
+    معرّف جديد لاتصال السوكيت الحالي.
+  */
+  session: string;
+
+  sdk?: string;
+  ver?: string;
+  id?: string;
 };
 
 export type LogoutPayload = {
