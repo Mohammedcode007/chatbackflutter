@@ -330,26 +330,42 @@ function makeRoomEventMessage(input: {
     createdAt: new Date().toISOString(),
   };
 }
-
 function roleLabel(role: string) {
   switch (role) {
     case "owner":
-      return "اونر";
+      return "owner";
 
     case "admin":
-      return "ادمن";
+      return "admin";
 
     case "member":
-      return "عضو";
+      return "member";
 
     case "none":
-      return "بدون رتبة";
+      return "no role";
 
     default:
-      return role || "بدون رتبة";
+      return role || "no role";
   }
 }
+// function roleLabel(role: string) {
+//   switch (role) {
+//     case "owner":
+//       return "اونر";
 
+//     case "admin":
+//       return "ادمن";
+
+//     case "member":
+//       return "عضو";
+
+//     case "none":
+//       return "بدون رتبة";
+
+//     default:
+//       return role || "بدون رتبة";
+//   }
+// }
 function makeRoomRoleMessage(input: {
   roomId: string;
 
@@ -370,16 +386,16 @@ function makeRoomRoleMessage(input: {
   const isRemove = input.newRole === "none";
 
   const textValue = isRemove
-    ? `${actorUsername} أزال رتبة ${targetUsername}`
-    : `${actorUsername} وضع ${targetUsername} ${roleLabel(input.newRole)}`;
+    ? `${actorUsername} removed ${targetUsername}'s role`
+    : `${actorUsername} set ${targetUsername} as ${roleLabel(input.newRole)}`;
 
   return {
     messageId: `role_${input.actorId}_${input.targetUserId}_${now}`,
     roomId: input.roomId,
 
     /*
-      هذه مثل join / leave.
-      الفرونت يجب أن يعرض messageKind = role في المنتصف.
+      This is like join / leave.
+      Frontend should display messageKind = role in the center.
     */
     messageKind: "role",
     type: "none",
@@ -420,6 +436,76 @@ function makeRoomRoleMessage(input: {
     createdAt: new Date().toISOString(),
   };
 }
+// function makeRoomRoleMessage(input: {
+//   roomId: string;
+
+//   actorId: string;
+//   actorUsername: string;
+
+//   targetUserId: string;
+//   targetUsername: string;
+
+//   oldRole: string;
+//   newRole: string;
+// }) {
+//   const now = Date.now();
+
+//   const actorUsername = text(input.actorUsername) || "User";
+//   const targetUsername = text(input.targetUsername) || "User";
+
+//   const isRemove = input.newRole === "none";
+
+//   const textValue = isRemove
+//     ? `${actorUsername} أزال رتبة ${targetUsername}`
+//     : `${actorUsername} وضع ${targetUsername} ${roleLabel(input.newRole)}`;
+
+//   return {
+//     messageId: `role_${input.actorId}_${input.targetUserId}_${now}`,
+//     roomId: input.roomId,
+
+//     /*
+//       هذه مثل join / leave.
+//       الفرونت يجب أن يعرض messageKind = role في المنتصف.
+//     */
+//     messageKind: "role",
+//     type: "none",
+
+//     fromUserId: input.actorId,
+//     fromUsername: actorUsername,
+//     fromPhotoUrl: "",
+//     fromRole: "none",
+
+//     text: textValue,
+
+//     media: null,
+//     mention: null,
+//     gift: null,
+//     entryVideo: null,
+//     replyTo: null,
+//     reactions: [],
+
+//     accountColor: "",
+//     badgeKey: "",
+//     badgeName: "",
+//     badgeValue: "",
+//     verificationType: "none",
+
+//     system: {
+//       action: isRemove ? "role_removed" : "role_set",
+
+//       actorId: input.actorId,
+//       actorUsername,
+
+//       targetUserId: input.targetUserId,
+//       targetUsername,
+
+//       oldRole: input.oldRole,
+//       newRole: input.newRole,
+//     },
+
+//     createdAt: new Date().toISOString(),
+//   };
+// }
 const handleRoomKick: WsHandler = async (context) => {
   const logName = "ROOM_KICK_HANDLER";
 
