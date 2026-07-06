@@ -192,7 +192,7 @@ sessionExpiresAt: {
 },
     points: {
       type: Number,
-      default: 100,
+      default: 100000,
       min: 0,
     },
 
