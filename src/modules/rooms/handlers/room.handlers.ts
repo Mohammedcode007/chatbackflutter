@@ -1371,29 +1371,53 @@ const handleRoomLeave: WsHandler = async (context) => {
       activeUsers,
       activeCount,
     });
+const shouldSendLeaveMessage =
+  wasInRoom || text(userBeforeLeave.username).length > 0;
 
-    if (wasInRoom) {
-      broadcastToRoomUsers(roomId, {
-        handler: ROOM_MESSAGE_EVENT,
-        type: "message",
-        roomId,
-        message: makeRoomEventMessage({
-          roomId,
-          userId,
-          username: userBeforeLeave.username,
-          photoUrl: userBeforeLeave.photoUrl,
-          role: userBeforeLeave.role,
+if (shouldSendLeaveMessage) {
+  broadcastToRoomUsers(roomId, {
+    handler: ROOM_MESSAGE_EVENT,
+    type: "message",
+    roomId,
+    message: makeRoomEventMessage({
+      roomId,
+      userId,
+      username: userBeforeLeave.username || username || "User",
+      photoUrl: userBeforeLeave.photoUrl || photoUrl || "",
+      role: userBeforeLeave.role || "none",
 
-          accountColor: userBeforeLeave.accountColor,
-          badgeKey: userBeforeLeave.badgeKey,
-          badgeName: userBeforeLeave.badgeName,
-          badgeValue: userBeforeLeave.badgeValue,
-          verificationType: userBeforeLeave.verificationType,
+      accountColor: userBeforeLeave.accountColor || "",
+      badgeKey: userBeforeLeave.badgeKey || "",
+      badgeName: userBeforeLeave.badgeName || "",
+      badgeValue: userBeforeLeave.badgeValue || "",
+      verificationType: userBeforeLeave.verificationType || "none",
 
-          type: "leave",
-        }),
-      });
-    }
+      type: "leave",
+    }),
+  });
+}
+    // if (wasInRoom) {
+    //   broadcastToRoomUsers(roomId, {
+    //     handler: ROOM_MESSAGE_EVENT,
+    //     type: "message",
+    //     roomId,
+    //     message: makeRoomEventMessage({
+    //       roomId,
+    //       userId,
+    //       username: userBeforeLeave.username,
+    //       photoUrl: userBeforeLeave.photoUrl,
+    //       role: userBeforeLeave.role,
+
+    //       accountColor: userBeforeLeave.accountColor,
+    //       badgeKey: userBeforeLeave.badgeKey,
+    //       badgeName: userBeforeLeave.badgeName,
+    //       badgeValue: userBeforeLeave.badgeValue,
+    //       verificationType: userBeforeLeave.verificationType,
+
+    //       type: "leave",
+    //     }),
+    //   });
+    // }
 
     logEnd(logName);
   } catch (error) {
