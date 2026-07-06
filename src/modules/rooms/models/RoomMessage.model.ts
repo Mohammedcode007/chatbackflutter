@@ -8,6 +8,10 @@ export type RoomMessageDocument = Document & {
   fromUsername: string;
   fromPhotoUrl: string;
 
+  fromBadgeValue: string;
+  fromBadgeImageUrl: string;
+  fromBadgeLottieUrl: string;
+
   messageKind: "user" | "join" | "leave" | "gift" | "system";
   type: "text" | "image" | "gif" | "none";
 
@@ -83,7 +87,20 @@ const RoomMessageSchema = new Schema<RoomMessageDocument>(
       type: String,
       default: "",
     },
+    fromBadgeValue: {
+      type: String,
+      default: "",
+    },
 
+    fromBadgeImageUrl: {
+      type: String,
+      default: "",
+    },
+
+    fromBadgeLottieUrl: {
+      type: String,
+      default: "",
+    },
     messageKind: {
       type: String,
       enum: ["user", "join", "leave", "gift", "system"],

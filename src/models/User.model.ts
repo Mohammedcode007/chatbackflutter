@@ -10,6 +10,8 @@ export type VerificationType = "none" | "blue" | "gold" | "business";
 export type InventoryItemType =
   | "account_color"
   | "badge"
+  | "image_badge"
+  | "lottie_badge"
   | "verification";
 
 export type UserInventoryItem = {
@@ -49,7 +51,13 @@ sessionExpiresAt?: Date | null;
   badgeKey: string;
   badgeName: string;
   badgeValue: string;
+  badgeImageKey: string;
+  badgeImageName: string;
+  badgeImageUrl: string;
 
+  badgeLottieKey: string;
+  badgeLottieName: string;
+  badgeLottieUrl: string;
   verificationType: VerificationType;
 
   inventory: UserInventoryItem[];
@@ -100,11 +108,17 @@ const InventoryItemSchema = new Schema<UserInventoryItem>(
       required: true,
     },
 
-    type: {
-      type: String,
-      enum: ["account_color", "badge", "verification"],
-      required: true,
-    },
+ type: {
+  type: String,
+  enum: [
+    "account_color",
+    "badge",
+    "image_badge",
+    "lottie_badge",
+    "verification",
+  ],
+  required: true,
+},
 
     key: {
       type: String,
@@ -221,7 +235,35 @@ sessionExpiresAt: {
       type: String,
       default: "",
     },
+        badgeImageKey: {
+      type: String,
+      default: "",
+    },
 
+    badgeImageName: {
+      type: String,
+      default: "",
+    },
+
+    badgeImageUrl: {
+      type: String,
+      default: "",
+    },
+
+    badgeLottieKey: {
+      type: String,
+      default: "",
+    },
+
+    badgeLottieName: {
+      type: String,
+      default: "",
+    },
+
+    badgeLottieUrl: {
+      type: String,
+      default: "",
+    },
     verificationType: {
       type: String,
       enum: ["none", "blue", "gold", "business"],

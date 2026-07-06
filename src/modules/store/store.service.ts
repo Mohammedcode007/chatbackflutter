@@ -39,6 +39,18 @@ function resetActiveByType(user: any, type: StoreItemType) {
     }
   }
 
+  if (type === "image_badge") {
+    user.badgeImageKey = "";
+    user.badgeImageName = "";
+    user.badgeImageUrl = "";
+  }
+
+  if (type === "lottie_badge") {
+    user.badgeLottieKey = "";
+    user.badgeLottieName = "";
+    user.badgeLottieUrl = "";
+  }
+
   if (type === "verification") {
     user.verificationType = "none";
   }
@@ -57,6 +69,18 @@ function applyItemToUser(user: any, item: any) {
     if (user.features) {
       user.features.badge = item.value;
     }
+  }
+
+  if (item.type === "image_badge") {
+    user.badgeImageKey = item.key;
+    user.badgeImageName = item.name;
+    user.badgeImageUrl = item.value;
+  }
+
+  if (item.type === "lottie_badge") {
+    user.badgeLottieKey = item.key;
+    user.badgeLottieName = item.name;
+    user.badgeLottieUrl = item.value;
   }
 
   if (item.type === "verification") {

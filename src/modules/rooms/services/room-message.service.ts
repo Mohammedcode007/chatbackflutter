@@ -235,189 +235,6 @@ async function incrementGiftStatsFromRoomMessage(input: {
   }
 }
 
-
-// export async function sendRoomLiveMessageService(input: {
-//   userId: string;
-//   username?: string;
-//   photoUrl?: string;
-
-//   roomId: string;
-
-//   type: RoomUserMessageType;
-//   text?: string;
-
-//   media?: any;
-
-//   mediaBase64?: string;
-//   fileName?: string;
-//   mimeType?: string;
-//   sizeBytes?: number;
-//   duration?: string;
-
-//   replyTo?: any;
-// }) {
-//   const userId = sanitizeUserId(input.userId);
-//   const roomId = sanitizeRoomId(input.roomId);
-//   const type = sanitizeRoomUserMessageType(input.type);
-//   const text = sanitizeRoomMessageText(input.text);
-
-//   if (!userId || !roomId) {
-//     return {
-//       ok: false as const,
-//       reason: "invalid_message_payload",
-//     };
-//   }
-
-//   const room = await RoomModel.findOne({ roomId }).lean();
-
-//   if (!room) {
-//     return {
-//       ok: false as const,
-//       reason: "room_not_found",
-//     };
-//   }
-
-//   if (Array.isArray(room.bannedUsers) && room.bannedUsers.includes(userId)) {
-//     return {
-//       ok: false as const,
-//       reason: "user_banned_from_room",
-//     };
-//   }
-
-//   const role = getRoomRole(room, userId);
-
-//   if (room.isLockedForNone && role === "none") {
-//     return {
-//       ok: false as const,
-//       reason: "room_locked_for_members_only",
-//     };
-//   }
-
-//  let media = sanitizeRoomMedia(input.media);
-
-// const hasBase64Media = isBase64Media(input.mediaBase64);
-
-// if (!media && hasBase64Media) {
-//   media = await uploadRoomMediaBase64ToCloudinary({
-//     roomId,
-//     type,
-//     mediaBase64: clean(input.mediaBase64),
-//     fileName: input.fileName,
-//     mimeType: input.mimeType,
-//     sizeBytes: input.sizeBytes,
-//     duration: input.duration,
-//   });
-// }
-
-// const replyTo = sanitizeRoomReply(input.replyTo);
-
-//   if (type === "text" && !text) {
-//     return {
-//       ok: false as const,
-//       reason: "empty_message",
-//     };
-//   }
-
-// if (
-//   (type === "image" ||
-//     type === "gif" ||
-//     type === "video" ||
-//     type === "audio" ||
-//     type === "voice") &&
-//   !media
-// ) {
-//   return {
-//     ok: false as const,
-//     reason: "missing_media",
-//   };
-// }
-//   /*
-//     @username msg
-//     لو النص يبدأ بمنشن، نرجع mentionDm للـ handler.
-//     الـ handler هو الذي يرسل DM باستخدام dm.service.
-//   */
-//   const parsedMention = type === "text" ? parseRoomMention(text) : null;
-
-//   let mention:
-//     | {
-//         username: string;
-//         userId: string;
-//         text: string;
-//       }
-//     | null = null;
-
-//   let mentionDm:
-//     | {
-//         toUserId: string;
-//         username: string;
-//         text: string;
-//       }
-//     | null = null;
-
-//   if (parsedMention) {
-//     const targetUser = await UserModel.findOne({
-//       username: parsedMention.username,
-//     })
-//       .select("userId username")
-//       .lean();
-
-//     if (targetUser) {
-//       mention = {
-//         username: parsedMention.username,
-//         userId: String((targetUser as any).userId || ""),
-//         text: parsedMention.text,
-//       };
-
-//       mentionDm = {
-//         toUserId: String((targetUser as any).userId || ""),
-//         username: parsedMention.username,
-//         text: parsedMention.text,
-//       };
-//     } else {
-//       mention = {
-//         username: parsedMention.username,
-//         userId: "",
-//         text: parsedMention.text,
-//       };
-//     }
-//   }
-
-//   const message: RoomLiveMessage = {
-//     messageId: makeRoomMessageId(),
-//     roomId,
-
-//     messageKind: "user",
-//     type,
-
-//     fromUserId: userId,
-//     fromUsername: clean(input.username),
-//     fromPhotoUrl: clean(input.photoUrl),
-//     fromRole: role,
-
-//     text,
-
-//     media: media as RoomLiveMedia | null,
-//     mention,
-//     gift: null,
-//     entryVideo: null,
-//     replyTo: replyTo as RoomReplyPayload | null,
-
-//     reactions: [],
-
-//     system: null,
-
-//     createdAt: nowIso(),
-//   };
-
-//   return {
-//     ok: true as const,
-//     room,
-//     role,
-//     message,
-//     mention,
-//     mentionDm,
-//   };
-// }
 export async function sendRoomLiveMessageService(input: {
   userId: string;
   username?: string;
@@ -624,33 +441,116 @@ export async function sendRoomLiveMessageService(input: {
     }
   }
 
-  const message: RoomLiveMessage = {
-    messageId: makeRoomMessageId(),
-    roomId,
+  /*
+    بيانات البادج الخاصة بمرسل الرسالة.
+    هذه البيانات ستصل للفرونت داخل الرسالة حتى تظهر بجانب الاسم.
+  */
+const senderUser = await UserModel.findOne({ userId })
+  .select(
+    [
+      "accountColor",
 
-    messageKind: "user",
-    type,
+      "badgeKey",
+      "badgeName",
+      "badgeValue",
 
-    fromUserId: userId,
-    fromUsername: clean(input.username),
-    fromPhotoUrl: clean(input.photoUrl),
-    fromRole: role,
+      "badgeImageKey",
+      "badgeImageName",
+      "badgeImageUrl",
 
-    text,
+      "badgeLottieKey",
+      "badgeLottieName",
+      "badgeLottieUrl",
 
-    media: media as RoomLiveMedia | null,
-    mention,
-    gift: null,
-    entryVideo: null,
-    replyTo: replyTo as RoomReplyPayload | null,
+      "verificationType",
+    ].join(" ")
+  )
+  .lean();
 
-    reactions: [],
+const accountColor = clean((senderUser as any)?.accountColor);
 
-    system: null,
+const badgeKey = clean((senderUser as any)?.badgeKey);
+const badgeName = clean((senderUser as any)?.badgeName);
+const badgeValue = clean((senderUser as any)?.badgeValue);
 
-    createdAt: nowIso(),
-  };
+const badgeImageKey = clean((senderUser as any)?.badgeImageKey);
+const badgeImageName = clean((senderUser as any)?.badgeImageName);
+const badgeImageUrl = clean((senderUser as any)?.badgeImageUrl);
 
+const badgeLottieKey = clean((senderUser as any)?.badgeLottieKey);
+const badgeLottieName = clean((senderUser as any)?.badgeLottieName);
+const badgeLottieUrl = clean((senderUser as any)?.badgeLottieUrl);
+
+const verificationType = clean((senderUser as any)?.verificationType);
+
+console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+console.log("🏷️ [ROOM_MESSAGE_SENDER_BADGES]");
+console.log("userId:", userId);
+console.log("accountColor:", accountColor);
+console.log("badgeKey:", badgeKey);
+console.log("badgeName:", badgeName);
+console.log("badgeValue:", badgeValue);
+console.log("badgeImageKey:", badgeImageKey);
+console.log("badgeImageName:", badgeImageName);
+console.log("badgeImageUrl:", badgeImageUrl);
+console.log("badgeLottieKey:", badgeLottieKey);
+console.log("badgeLottieName:", badgeLottieName);
+console.log("badgeLottieUrl:", badgeLottieUrl);
+console.log("verificationType:", verificationType);
+console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
+ const message: RoomLiveMessage = {
+  messageId: makeRoomMessageId(),
+  roomId,
+
+  messageKind: "user",
+  type,
+
+  fromUserId: userId,
+  fromUsername: clean(input.username),
+  fromPhotoUrl: clean(input.photoUrl),
+  fromRole: role,
+
+  /*
+    أسماء fromBadge* للفرونت الجديد
+  */
+  fromBadgeValue: badgeValue,
+  fromBadgeImageUrl: badgeImageUrl,
+  fromBadgeLottieUrl: badgeLottieUrl,
+
+  /*
+    أسماء badge* للتوافق مع أي موديل قديم أو قراءة مباشرة
+  */
+  accountColor,
+
+  badgeKey,
+  badgeName,
+  badgeValue,
+
+  badgeImageKey,
+  badgeImageName,
+  badgeImageUrl,
+
+  badgeLottieKey,
+  badgeLottieName,
+  badgeLottieUrl,
+
+  verificationType,
+
+  text,
+
+  media: media as RoomLiveMedia | null,
+  mention,
+  gift: null,
+  entryVideo: null,
+  replyTo: replyTo as RoomReplyPayload | null,
+
+  reactions: [],
+
+  system: null,
+
+  createdAt: nowIso(),
+};
   /*
     كشف الهدية:
     الهدية عندك حاليًا تصل كرسالة فيديو عادية:
@@ -741,6 +641,330 @@ export async function sendRoomLiveMessageService(input: {
     giftStatsResult,
   };
 }
+
+// export async function sendRoomLiveMessageService(input: {
+//   userId: string;
+//   username?: string;
+//   photoUrl?: string;
+
+//   roomId: string;
+
+//   type: RoomUserMessageType;
+//   text?: string;
+
+//   media?: any;
+
+//   mediaBase64?: string;
+//   fileName?: string;
+//   mimeType?: string;
+//   sizeBytes?: number;
+//   duration?: string;
+
+//   replyTo?: any;
+
+//   /*
+//     بيانات الهدية لو جاية من الفرونت
+//   */
+//   isGift?: boolean;
+//   giftKey?: string;
+//   targetUserId?: string;
+//   targetUsername?: string;
+// }) {
+//   const userId = sanitizeUserId(input.userId);
+//   const roomId = sanitizeRoomId(input.roomId);
+//   const type = sanitizeRoomUserMessageType(input.type);
+//   const text = sanitizeRoomMessageText(input.text);
+
+//   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+//   console.log("===== SEND_ROOM_LIVE_MESSAGE_SERVICE_START =====");
+//   console.log("[SEND_ROOM_LIVE_MESSAGE_SERVICE] raw input:", JSON.stringify(input, null, 2));
+//   console.log("[SEND_ROOM_LIVE_MESSAGE_SERVICE] sanitized:", {
+//     userId,
+//     roomId,
+//     type,
+//     text,
+//   });
+
+//   if (!userId || !roomId) {
+//     console.log("❌ [SEND_ROOM_LIVE_MESSAGE_SERVICE] invalid_message_payload");
+//     console.log("===== SEND_ROOM_LIVE_MESSAGE_SERVICE_END =====");
+//     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
+//     return {
+//       ok: false as const,
+//       reason: "invalid_message_payload",
+//     };
+//   }
+
+//   const room = await RoomModel.findOne({ roomId }).lean();
+
+//   if (!room) {
+//     console.log("❌ [SEND_ROOM_LIVE_MESSAGE_SERVICE] room_not_found:", roomId);
+//     console.log("===== SEND_ROOM_LIVE_MESSAGE_SERVICE_END =====");
+//     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
+//     return {
+//       ok: false as const,
+//       reason: "room_not_found",
+//     };
+//   }
+
+//   if (Array.isArray(room.bannedUsers) && room.bannedUsers.includes(userId)) {
+//     console.log("❌ [SEND_ROOM_LIVE_MESSAGE_SERVICE] user_banned_from_room:", {
+//       roomId,
+//       userId,
+//     });
+//     console.log("===== SEND_ROOM_LIVE_MESSAGE_SERVICE_END =====");
+//     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
+//     return {
+//       ok: false as const,
+//       reason: "user_banned_from_room",
+//     };
+//   }
+
+//   const role = getRoomRole(room, userId);
+
+//   console.log("[SEND_ROOM_LIVE_MESSAGE_SERVICE] user role:", role);
+
+//   if (room.isLockedForNone && role === "none") {
+//     console.log("❌ [SEND_ROOM_LIVE_MESSAGE_SERVICE] room_locked_for_members_only:", {
+//       roomId,
+//       userId,
+//       role,
+//     });
+//     console.log("===== SEND_ROOM_LIVE_MESSAGE_SERVICE_END =====");
+//     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
+//     return {
+//       ok: false as const,
+//       reason: "room_locked_for_members_only",
+//     };
+//   }
+
+//   let media = sanitizeRoomMedia(input.media);
+
+//   const hasBase64Media = isBase64Media(input.mediaBase64);
+
+//   console.log("[SEND_ROOM_LIVE_MESSAGE_SERVICE] media before upload:", JSON.stringify(media, null, 2));
+//   console.log("[SEND_ROOM_LIVE_MESSAGE_SERVICE] hasBase64Media:", hasBase64Media);
+
+//   if (!media && hasBase64Media) {
+//     media = await uploadRoomMediaBase64ToCloudinary({
+//       roomId,
+//       type,
+//       mediaBase64: clean(input.mediaBase64),
+//       fileName: input.fileName,
+//       mimeType: input.mimeType,
+//       sizeBytes: input.sizeBytes,
+//       duration: input.duration,
+//     });
+
+//     console.log("[SEND_ROOM_LIVE_MESSAGE_SERVICE] media after upload:", JSON.stringify(media, null, 2));
+//   }
+
+//   const replyTo = sanitizeRoomReply(input.replyTo);
+
+//   if (type === "text" && !text) {
+//     console.log("❌ [SEND_ROOM_LIVE_MESSAGE_SERVICE] empty_message");
+//     console.log("===== SEND_ROOM_LIVE_MESSAGE_SERVICE_END =====");
+//     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
+//     return {
+//       ok: false as const,
+//       reason: "empty_message",
+//     };
+//   }
+
+//   if (
+//     (type === "image" ||
+//       type === "gif" ||
+//       type === "video" ||
+//       type === "audio" ||
+//       type === "voice") &&
+//     !media
+//   ) {
+//     console.log("❌ [SEND_ROOM_LIVE_MESSAGE_SERVICE] missing_media:", {
+//       type,
+//       media,
+//     });
+//     console.log("===== SEND_ROOM_LIVE_MESSAGE_SERVICE_END =====");
+//     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
+//     return {
+//       ok: false as const,
+//       reason: "missing_media",
+//     };
+//   }
+
+//   /*
+//     @username msg
+//     لو النص يبدأ بمنشن، نرجع mentionDm للـ handler.
+//     الـ handler هو الذي يرسل DM باستخدام dm.service.
+//   */
+//   const parsedMention = type === "text" ? parseRoomMention(text) : null;
+
+//   let mention:
+//     | {
+//         username: string;
+//         userId: string;
+//         text: string;
+//       }
+//     | null = null;
+
+//   let mentionDm:
+//     | {
+//         toUserId: string;
+//         username: string;
+//         text: string;
+//       }
+//     | null = null;
+
+//   if (parsedMention) {
+//     const targetUser = await UserModel.findOne({
+//       username: parsedMention.username,
+//     })
+//       .select("userId username")
+//       .lean();
+
+//     if (targetUser) {
+//       mention = {
+//         username: parsedMention.username,
+//         userId: String((targetUser as any).userId || ""),
+//         text: parsedMention.text,
+//       };
+
+//       mentionDm = {
+//         toUserId: String((targetUser as any).userId || ""),
+//         username: parsedMention.username,
+//         text: parsedMention.text,
+//       };
+//     } else {
+//       mention = {
+//         username: parsedMention.username,
+//         userId: "",
+//         text: parsedMention.text,
+//       };
+//     }
+//   }
+
+//   const message: RoomLiveMessage = {
+//     messageId: makeRoomMessageId(),
+//     roomId,
+
+//     messageKind: "user",
+//     type,
+
+//     fromUserId: userId,
+//     fromUsername: clean(input.username),
+//     fromPhotoUrl: clean(input.photoUrl),
+//     fromRole: role,
+
+//     text,
+
+//     media: media as RoomLiveMedia | null,
+//     mention,
+//     gift: null,
+//     entryVideo: null,
+//     replyTo: replyTo as RoomReplyPayload | null,
+
+//     reactions: [],
+
+//     system: null,
+
+//     createdAt: nowIso(),
+//   };
+
+//   /*
+//     كشف الهدية:
+//     الهدية عندك حاليًا تصل كرسالة فيديو عادية:
+//     type: "video"
+//     text: "lina sent Blue Car to lina"
+//     media.fileName: "blue_car.mp4"
+
+//     لذلك نعتبرها هدية إذا:
+//     - input.isGift === true
+//     - أو giftKey موجود
+//     - أو اسم الملف blue_car
+//     - أو النص يحتوي sent / gift / to
+//   */
+//   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+//   console.log("🎁 [ROOM_MESSAGE_GIFT_CHECK]");
+//   console.log("type:", type);
+//   console.log("text:", text);
+//   console.log("input.isGift:", input.isGift);
+//   console.log("input.giftKey:", input.giftKey);
+//   console.log("input.targetUserId:", input.targetUserId);
+//   console.log("input.targetUsername:", input.targetUsername);
+//   console.log("media:", JSON.stringify(media || null, null, 2));
+
+//   const mediaFileName = clean((media as any)?.fileName).toLowerCase();
+//   const giftKey = clean(input.giftKey).toLowerCase();
+//   const lowerText = text.toLowerCase();
+
+//   const isGiftVideoMessage =
+//     input.isGift === true ||
+//     !!giftKey ||
+//     (
+//       type === "video" &&
+//       !!media &&
+//       (
+//         mediaFileName.includes("blue_car") ||
+//         lowerText.includes(" sent ") ||
+//         lowerText.includes(" gift ") ||
+//         lowerText.includes(" to ")
+//       )
+//     );
+
+//   console.log("🎁 [ROOM_MESSAGE_IS_GIFT_VIDEO]:", isGiftVideoMessage);
+
+//   let giftStatsResult: any = null;
+
+//   if (isGiftVideoMessage) {
+//     let targetUserId = sanitizeUserId(input.targetUserId);
+//     let targetUsername = clean(input.targetUsername);
+
+//     /*
+//       لو الفرونت لم يرسل targetUsername
+//       نحاول استخراجه من النص:
+//       lina sent Blue Car to lina
+//     */
+//     if (!targetUsername && text.includes(" to ")) {
+//       const parts = text.split(" to ");
+//       targetUsername = clean(parts[parts.length - 1]);
+//     }
+
+//     console.log("🎁 [ROOM_MESSAGE_GIFT_TARGET]");
+//     console.log("targetUserId:", targetUserId);
+//     console.log("targetUsername:", targetUsername);
+
+//     giftStatsResult = await incrementGiftStatsFromRoomMessage({
+//       fromUserId: userId,
+//       targetUserId,
+//       targetUsername,
+//       text,
+//     });
+
+//     console.log(
+//       "📊 [ROOM_MESSAGE_GIFT_STATS_RESULT]:",
+//       JSON.stringify(giftStatsResult, null, 2)
+//     );
+//   }
+
+//   console.log("[SEND_ROOM_LIVE_MESSAGE_SERVICE] final message:", JSON.stringify(message, null, 2));
+//   console.log("===== SEND_ROOM_LIVE_MESSAGE_SERVICE_DONE =====");
+//   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
+//   return {
+//     ok: true as const,
+//     room,
+//     role,
+//     message,
+//     mention,
+//     mentionDm,
+//     giftStatsResult,
+//   };
+// }
 /*
   رسالة نظام Live فقط.
   تستخدمها في:

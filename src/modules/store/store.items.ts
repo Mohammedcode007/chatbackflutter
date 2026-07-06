@@ -1,4 +1,9 @@
-export type StoreItemType = "account_color" | "badge" | "verification";
+export type StoreItemType =
+  | "account_color"
+  | "badge"
+  | "image_badge"
+  | "lottie_badge"
+  | "verification";
 
 export type StoreItem = {
   itemId: string;
@@ -13,13 +18,15 @@ export type StoreItem = {
 export const STORE_PRICES = {
   account_color: 100,
   badge: 200,
+  image_badge: 300,
+  lottie_badge: 500,
   verification: 1000,
 } as const;
 
 export const STORE_DURATION_DAYS = 30;
 
 export const STORE_ITEMS: StoreItem[] = [
-  // Colors - كل الألوان نفس السعر ونفس المدة
+  // Colors
   {
     itemId: "color_green",
     type: "account_color",
@@ -84,7 +91,7 @@ export const STORE_ITEMS: StoreItem[] = [
     durationDays: STORE_DURATION_DAYS,
   },
 
-  // Badges - كل البادجات نفس السعر ونفس المدة
+  // Emoji Badges القديمة
   {
     itemId: "badge_star",
     type: "badge",
@@ -122,7 +129,65 @@ export const STORE_ITEMS: StoreItem[] = [
     durationDays: STORE_DURATION_DAYS,
   },
 
-  // Verification - كل التوثيق نفس السعر ونفس المدة
+  // Image Badges الجديدة
+  {
+    itemId: "image_badge_eagle",
+    type: "image_badge",
+    key: "eagle",
+    name: "Eagle Badge",
+    value: "https://te-bot.site/uploads/badges/eagle.png",
+    price: STORE_PRICES.image_badge,
+    durationDays: STORE_DURATION_DAYS,
+  },
+  {
+    itemId: "image_badge_lion",
+    type: "image_badge",
+    key: "lion",
+    name: "Lion Badge",
+    value: "https://png.pngtree.com/png-vector/20250304/ourmid/pngtree-illustration-of-a-roaring-lion-golden-color-hd-image-transparent-background-png-image_15711787.png",
+    price: STORE_PRICES.image_badge,
+    durationDays: STORE_DURATION_DAYS,
+  },
+  {
+    itemId: "image_badge_skull",
+    type: "image_badge",
+    key: "skull",
+    name: "Skull Badge",
+    value: "https://te-bot.site/uploads/badges/skull.png",
+    price: STORE_PRICES.image_badge,
+    durationDays: STORE_DURATION_DAYS,
+  },
+
+  // Lottie Badges الجديدة
+  {
+    itemId: "lottie_badge_eagle_fire",
+    type: "lottie_badge",
+    key: "eagle_fire",
+    name: "Eagle Fire Lottie",
+    value: "https://te-bot.site/uploads/badges/eagle-fire.json",
+    price: STORE_PRICES.lottie_badge,
+    durationDays: STORE_DURATION_DAYS,
+  },
+  {
+    itemId: "lottie_badge_lion_gold",
+    type: "lottie_badge",
+    key: "lion_gold",
+    name: "Lion Gold Lottie",
+    value: "https://te-bot.site/uploads/badges/lion-gold.json",
+    price: STORE_PRICES.lottie_badge,
+    durationDays: STORE_DURATION_DAYS,
+  },
+  {
+    itemId: "lottie_badge_skull_dark",
+    type: "lottie_badge",
+    key: "skull_dark",
+    name: "Skull Dark Lottie",
+    value: "https://te-bot.site/uploads/badges/skull1.json",
+    price: STORE_PRICES.lottie_badge,
+    durationDays: STORE_DURATION_DAYS,
+  },
+
+  // Verification
   {
     itemId: "verify_blue",
     type: "verification",
