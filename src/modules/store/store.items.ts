@@ -1,3 +1,5 @@
+
+
 export type StoreItemType =
   | "account_color"
   | "badge"
@@ -14,6 +16,11 @@ export type StoreItem = {
   price: number;
   durationDays: number;
 };
+
+export type StoreItemGroup =
+  | "account_color"
+  | "badge_group"
+  | "verification";
 
 export const STORE_PRICES = {
   account_color: 100,
@@ -135,7 +142,7 @@ export const STORE_ITEMS: StoreItem[] = [
     type: "image_badge",
     key: "eagle",
     name: "Eagle Badge",
-    value: "https://te-bot.site/uploads/badges/eagle.png",
+    value: "tps://te-bot.site/chatbackflutter/uploads/badges/eagle.png",
     price: STORE_PRICES.image_badge,
     durationDays: STORE_DURATION_DAYS,
   },
@@ -144,7 +151,8 @@ export const STORE_ITEMS: StoreItem[] = [
     type: "image_badge",
     key: "lion",
     name: "Lion Badge",
-    value: "https://png.pngtree.com/png-vector/20250304/ourmid/pngtree-illustration-of-a-roaring-lion-golden-color-hd-image-transparent-background-png-image_15711787.png",
+    value:
+      "https://te-bot.site/chatbackflutter/uploads/badges/lion.png?v=101",
     price: STORE_PRICES.image_badge,
     durationDays: STORE_DURATION_DAYS,
   },
@@ -153,7 +161,7 @@ export const STORE_ITEMS: StoreItem[] = [
     type: "image_badge",
     key: "skull",
     name: "Skull Badge",
-    value: "https://te-bot.site/uploads/badges/skull.png",
+    value: "tps://te-bot.site/chatbackflutter/uploads/badges/skull.png",
     price: STORE_PRICES.image_badge,
     durationDays: STORE_DURATION_DAYS,
   },
@@ -164,7 +172,7 @@ export const STORE_ITEMS: StoreItem[] = [
     type: "lottie_badge",
     key: "eagle_fire",
     name: "Eagle Fire Lottie",
-    value: "https://te-bot.site/uploads/badges/eagle-fire.json",
+    value: "tps://te-bot.site/chatbackflutter/uploads/badges/eagle-fire.json",
     price: STORE_PRICES.lottie_badge,
     durationDays: STORE_DURATION_DAYS,
   },
@@ -173,7 +181,7 @@ export const STORE_ITEMS: StoreItem[] = [
     type: "lottie_badge",
     key: "lion_gold",
     name: "Lion Gold Lottie",
-    value: "https://te-bot.site/uploads/badges/lion-gold.json",
+    value: "tps://te-bot.site/chatbackflutter/uploads/badges/lion-gold.json",
     price: STORE_PRICES.lottie_badge,
     durationDays: STORE_DURATION_DAYS,
   },
@@ -182,7 +190,7 @@ export const STORE_ITEMS: StoreItem[] = [
     type: "lottie_badge",
     key: "skull_dark",
     name: "Skull Dark Lottie",
-    value: "https://te-bot.site/uploads/badges/skull1.json",
+    value: "https://te-bot.site/chatbackflutter/uploads/badges/skull1.json",
     price: STORE_PRICES.lottie_badge,
     durationDays: STORE_DURATION_DAYS,
   },
@@ -219,4 +227,24 @@ export const STORE_ITEMS: StoreItem[] = [
 
 export function findStoreItem(itemId: string) {
   return STORE_ITEMS.find((item) => item.itemId === itemId);
+}
+
+export function getStoreItemGroup(type: StoreItemType): StoreItemGroup {
+  if (
+    type === "badge" ||
+    type === "image_badge" ||
+    type === "lottie_badge"
+  ) {
+    return "badge_group";
+  }
+
+  return type;
+}
+
+export function isBadgeStoreItemType(type: StoreItemType) {
+  return (
+    type === "badge" ||
+    type === "image_badge" ||
+    type === "lottie_badge"
+  );
 }

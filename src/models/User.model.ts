@@ -23,6 +23,18 @@ export type UserInventoryItem = {
   purchasedAt: Date;
   expiresAt?: Date | null;
   isActive: boolean;
+
+  /*
+    آخر مرة المستخدم جدد نفس العنصر.
+    مثال: اشترى نفس البادج مرة أخرى لتمديد المدة.
+  */
+  renewedAt?: Date | null;
+
+  /*
+    آخر مرة المستخدم فعّل هذا العنصر من المخزون.
+    مثال: بدّل من لوتي إلى صورة أو العكس.
+  */
+  activatedAt?: Date | null;
 };
 
 export type UserStats = {
@@ -41,8 +53,8 @@ export type UserDocument = Document & {
 
   photoUrl: string;
   photoPublicId: string;
-sessionTokenHash?: string;
-sessionExpiresAt?: Date | null;
+  sessionTokenHash?: string;
+  sessionExpiresAt?: Date | null;
   coverUrl: string;
   coverPublicId: string;
 
@@ -108,17 +120,17 @@ const InventoryItemSchema = new Schema<UserInventoryItem>(
       required: true,
     },
 
- type: {
-  type: String,
-  enum: [
-    "account_color",
-    "badge",
-    "image_badge",
-    "lottie_badge",
-    "verification",
-  ],
-  required: true,
-},
+    type: {
+      type: String,
+      enum: [
+        "account_color",
+        "badge",
+        "image_badge",
+        "lottie_badge",
+        "verification",
+      ],
+      required: true,
+    },
 
     key: {
       type: String,
@@ -149,6 +161,15 @@ const InventoryItemSchema = new Schema<UserInventoryItem>(
       type: Boolean,
       default: false,
     },
+        renewedAt: {
+      type: Date,
+      default: null,
+    },
+
+    activatedAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     _id: false,
@@ -177,19 +198,19 @@ const UserSchema = new Schema<UserDocument>(
       type: String,
       required: true,
     },
-sessionTokenHash: {
-  type: String,
-  default: "",
-  select: false,
-  index: true,
-},
+    sessionTokenHash: {
+      type: String,
+      default: "",
+      select: false,
+      index: true,
+    },
 
-sessionExpiresAt: {
-  type: Date,
-  default: null,
-  select: false,
-  index: true,
-},
+    sessionExpiresAt: {
+      type: Date,
+      default: null,
+      select: false,
+      index: true,
+    },
     points: {
       type: Number,
       default: 100000,
@@ -235,7 +256,7 @@ sessionExpiresAt: {
       type: String,
       default: "",
     },
-        badgeImageKey: {
+    badgeImageKey: {
       type: String,
       default: "",
     },
