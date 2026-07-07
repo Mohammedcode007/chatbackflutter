@@ -190,11 +190,19 @@ export const STORE_ITEMS: StoreItem[] = [
     type: "lottie_badge",
     key: "skull_dark",
     name: "Skull Dark Lottie",
-    value: "https://te-bot.site/chatbackflutter/uploads/badges/skull1.json",
+    value: "https://te-bot.site/chatbackflutter/uploads/badges/Skull1.json",
     price: STORE_PRICES.lottie_badge,
     durationDays: STORE_DURATION_DAYS,
   },
-
+{
+  itemId: "lottie_badge_batman_dark",
+  type: "lottie_badge",
+  key: "batman_dark",
+  name: "Batman Dark Lottie",
+  value: "https://te-bot.site/chatbackflutter/uploads/badges/bat1.json",
+  price: STORE_PRICES.lottie_badge,
+  durationDays: STORE_DURATION_DAYS,
+},
   // Verification
   {
     itemId: "verify_blue",
