@@ -161,7 +161,7 @@ export const STORE_ITEMS: StoreItem[] = [
     type: "image_badge",
     key: "skull",
     name: "Skull Badge",
-    value: "tps://te-bot.site/chatbackflutter/uploads/badges/skull.png",
+    value: "https://te-bot.site/chatbackflutter/uploads/badges/skull.png",
     price: STORE_PRICES.image_badge,
     durationDays: STORE_DURATION_DAYS,
   },
