@@ -8,6 +8,14 @@ export function createApp() {
   app.use(cors());
   app.use(express.json());
   app.use(
+  express.static(path.join(process.cwd(), "public"))
+);
+
+app.use(
+  "/chatbackflutter",
+  express.static(path.join(process.cwd(), "public"))
+);
+  app.use(
     "/uploads",
     express.static(path.join(process.cwd(), "public/uploads"))
   );
