@@ -43,14 +43,18 @@ export type UserStats = {
   giftsSentCount: number;
   giftsReceivedCount: number;
 };
-
+export type UserFcmToken = {
+  token: string;
+  platform: "android" | "ios" | "web" | string;
+  updatedAt: Date;
+};
 export type UserDocument = Document & {
   userId: string;
   username: string;
   password: string;
 
   points: number;
-
+fcmTokens: UserFcmToken[];
   photoUrl: string;
   photoPublicId: string;
   sessionTokenHash?: string;
@@ -175,7 +179,28 @@ const InventoryItemSchema = new Schema<UserInventoryItem>(
     _id: false,
   }
 );
+const UserFcmTokenSchema = new Schema<UserFcmToken>(
+  {
+    token: {
+      type: String,
+      required: true,
+      index: true,
+    },
 
+    platform: {
+      type: String,
+      default: "android",
+    },
+
+    updatedAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  {
+    _id: false,
+  }
+);
 const UserSchema = new Schema<UserDocument>(
   {
     userId: {
@@ -216,7 +241,10 @@ const UserSchema = new Schema<UserDocument>(
       default: 100000,
       min: 0,
     },
-
+fcmTokens: {
+  type: [UserFcmTokenSchema],
+  default: [],
+},
     photoUrl: {
       type: String,
       default: "",

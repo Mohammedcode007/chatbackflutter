@@ -2,7 +2,7 @@ import { randomUUID } from "crypto";
 import { v2 as cloudinary } from "cloudinary";
 import { UserModel } from "../../models/User.model";
 import { isUserOnline } from "../../websocket/stores/clients.store";
-
+import { sendPushToUser } from "../../services/pushNotification.service";
 import {
   DmMediaPayload,
   DmMessagePayload,
@@ -412,7 +412,29 @@ if (type !== "text" && !media) {
     createdAt: now,
     updatedAt: now,
   };
-
+void sendPushToUser({
+  userId: toUserId,
+  title: readText((permission.fromUser as any).username) || "Talkin Plus",
+  body:
+    type === "text"
+      ? text
+      : type === "image"
+      ? "Sent you a photo"
+      : type === "video"
+      ? "Sent you a video"
+      : type === "audio"
+      ? "Sent you a voice message"
+      : "Sent you a file",
+  data: {
+    type: "dm",
+    chatId: message.chatId,
+    messageId: message.messageId,
+    fromUserId,
+    toUserId,
+  },
+}).catch((error) => {
+  console.error("[DM_PUSH_SEND_ERROR]", error);
+});
   /*
     Online الحقيقي من sockets.
     هذا فقط لتحديد هل نرسل الرسالة فورًا أم نخزنها في Redis.
