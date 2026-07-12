@@ -3,7 +3,8 @@ import { requireLogin } from "../../websocket/ws.auth";
 import { sendError, sendSuccess } from "../../websocket/ws.utils";
 import { sendToUserIfOnline } from "../../websocket/stores/clients.store";
 import { WS_EVENTS, WS_HANDLERS } from "../../websocket/ws.events";
-
+import { merchantConfig } from "../../features/merchant/merchant.config";
+import { executeMerchantCommand } from "../../features/merchant/merchant-command.service";
 import {
   canSendDmSignal,
   checkDmPermissionOnly,

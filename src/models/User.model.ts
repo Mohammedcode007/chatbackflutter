@@ -13,7 +13,21 @@ export type InventoryItemType =
   | "image_badge"
   | "lottie_badge"
   | "verification";
+export type PlatformRole = "user" | "admin" | "owner";
 
+export type UserAccountType =
+  | "none"
+  | "merchant"
+  | "dealer"
+  | "agent"
+  | "partner"
+  | "creator"
+  | "broadcaster"
+  | "vip"
+  | "business"
+  | "official"
+  | "sponsor"
+  | "tester";
 export type UserInventoryItem = {
   itemId: string;
   type: InventoryItemType;
@@ -52,9 +66,60 @@ export type UserDocument = Document & {
   userId: string;
   username: string;
   password: string;
+  /*
+    صلاحية المستخدم العامة داخل النظام.
 
+    user:
+    مستخدم عادي.
+
+    admin:
+    مدير عام يستطيع استخدام أوامر الإدارة المسموحة.
+
+    owner:
+    مالك النظام وصاحب أعلى صلاحية.
+  */
+  platformRole: PlatformRole;
+
+  /*
+    نوع الحساب التجاري أو التعريفي.
+    القيمة الافتراضية none للمستخدمين الحاليين والجدد.
+  */
+  accountType: UserAccountType;
+
+  /*
+    رابط يظهر أو يعمل عند دخول المستخدم إلى الغرفة.
+    يمكن أن يكون:
+    - صورة
+    - GIF
+    - فيديو
+    - Lottie JSON
+
+    التطبيق هو المسؤول عن تحديد طريقة عرضه حسب الامتداد.
+  */
+  roomEntryMediaUrl: string;
+
+  /*
+    رابط يظهر عند فتح صفحة بروفايل المستخدم.
+  */
+  profileEntryMediaUrl: string;
+
+  /*
+    رسالة مخصصة تظهر عند دخول المستخدم إلى الغرفة.
+    الحد الأقصى المقترح 160 حرفًا.
+  */
+  roomWelcomeMessage: string;
+
+  /*
+    تفعيل أو تعطيل تأثير الدخول إلى الغرف.
+  */
+  roomEntryEnabled: boolean;
+
+  /*
+    تفعيل أو تعطيل التأثير عند فتح البروفايل.
+  */
+  profileEntryEnabled: boolean;
   points: number;
-fcmTokens: UserFcmToken[];
+  fcmTokens: UserFcmToken[];
   photoUrl: string;
   photoPublicId: string;
   sessionTokenHash?: string;
@@ -165,7 +230,7 @@ const InventoryItemSchema = new Schema<UserInventoryItem>(
       type: Boolean,
       default: false,
     },
-        renewedAt: {
+    renewedAt: {
       type: Date,
       default: null,
     },
@@ -223,6 +288,63 @@ const UserSchema = new Schema<UserDocument>(
       type: String,
       required: true,
     },
+        platformRole: {
+      type: String,
+      enum: ["user", "admin", "owner"],
+      default: "user",
+      index: true,
+    },
+
+    accountType: {
+      type: String,
+      enum: [
+        "none",
+        "merchant",
+        "dealer",
+        "agent",
+        "partner",
+        "creator",
+        "broadcaster",
+        "vip",
+        "business",
+        "official",
+        "sponsor",
+        "tester",
+      ],
+      default: "none",
+      index: true,
+    },
+
+    roomEntryMediaUrl: {
+      type: String,
+      default: "",
+      trim: true,
+      maxlength: 2048,
+    },
+
+    profileEntryMediaUrl: {
+      type: String,
+      default: "",
+      trim: true,
+      maxlength: 2048,
+    },
+
+    roomWelcomeMessage: {
+      type: String,
+      default: "",
+      trim: true,
+      maxlength: 160,
+    },
+
+    roomEntryEnabled: {
+      type: Boolean,
+      default: false,
+    },
+
+    profileEntryEnabled: {
+      type: Boolean,
+      default: false,
+    },
     sessionTokenHash: {
       type: String,
       default: "",
@@ -241,10 +363,10 @@ const UserSchema = new Schema<UserDocument>(
       default: 100000,
       min: 0,
     },
-fcmTokens: {
-  type: [UserFcmTokenSchema],
-  default: [],
-},
+    fcmTokens: {
+      type: [UserFcmTokenSchema],
+      default: [],
+    },
     photoUrl: {
       type: String,
       default: "",
@@ -473,5 +595,13 @@ fcmTokens: {
     timestamps: true,
   }
 );
+UserSchema.index({
+  platformRole: 1,
+  accountType: 1,
+});
 
+UserSchema.index({
+  username: 1,
+  platformRole: 1,
+});
 export const UserModel = mongoose.model<UserDocument>("User", UserSchema);
