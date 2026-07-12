@@ -1,0 +1,323 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.uploadTweetMedia = uploadTweetMedia;
+exports.uploadTweetMediaList = uploadTweetMediaList;
+exports.deleteTweetMedia = deleteTweetMedia;
+exports.deleteTweetMediaList = deleteTweetMediaList;
+const cloudinary_1 = require("../../config/cloudinary");
+const MAX_IMAGES_PER_TWEET = 4;
+const MAX_IMAGE_SIZE_BYTES = Number(process.env.TWEET_IMAGE_MAX_SIZE_BYTES ??
+    10 * 1024 * 1024);
+const MAX_VIDEO_SIZE_BYTES = Number(process.env.TWEET_VIDEO_MAX_SIZE_BYTES ??
+    30 * 1024 * 1024);
+const CLOUDINARY_TWEETS_FOLDER = String(process.env.CLOUDINARY_TWEETS_FOLDER ??
+    "bimo/tweets").trim();
+const ALLOWED_IMAGE_MIME_TYPES = new Set([
+    "image/jpeg",
+    "image/jpg",
+    "image/png",
+    "image/webp",
+    "image/gif",
+]);
+const ALLOWED_VIDEO_MIME_TYPES = new Set([
+    "video/mp4",
+    "video/webm",
+    "video/quicktime",
+    "video/x-matroska",
+]);
+function cleanText(value) {
+    return String(value ?? "").trim();
+}
+function normalizeMimeType(value) {
+    return cleanText(value)
+        .toLowerCase()
+        .split(";")[0]
+        .trim();
+}
+function normalizeMediaType(value) {
+    const type = cleanText(value).toLowerCase();
+    if (type !== "image" &&
+        type !== "video") {
+        throw new Error("invalid_tweet_media_type");
+    }
+    return type;
+}
+function getMimeTypeFromDataUrl(value) {
+    const match = value.match(/^data:([^;,]+);base64,/i);
+    if (!match) {
+        return "";
+    }
+    return normalizeMimeType(match[1]);
+}
+function ensureBase64DataUrl(base64Value, mimeTypeValue) {
+    const base64 = cleanText(base64Value);
+    if (!base64) {
+        throw new Error("tweet_media_base64_required");
+    }
+    if (base64
+        .toLowerCase()
+        .startsWith("data:")) {
+        return base64;
+    }
+    const mimeType = normalizeMimeType(mimeTypeValue);
+    if (!mimeType) {
+        throw new Error("tweet_media_mime_type_required");
+    }
+    return `data:${mimeType};base64,${base64}`;
+}
+function getBase64Content(value) {
+    const commaIndex = value.indexOf(",");
+    const content = commaIndex >= 0
+        ? value.substring(commaIndex + 1)
+        : value;
+    return content.replace(/\s/g, "");
+}
+function getBase64SizeBytes(value) {
+    const cleanBase64 = getBase64Content(value);
+    if (!cleanBase64) {
+        return 0;
+    }
+    const padding = cleanBase64.endsWith("==")
+        ? 2
+        : cleanBase64.endsWith("=")
+            ? 1
+            : 0;
+    return (Math.floor(cleanBase64.length *
+        3 /
+        4) - padding);
+}
+function validateBase64Content(value) {
+    const cleanBase64 = getBase64Content(value);
+    if (!cleanBase64) {
+        throw new Error("empty_tweet_media_file");
+    }
+    /*
+      يسمح بأحرف Base64 العادية.
+    */
+    const isValid = /^[A-Za-z0-9+/]*={0,2}$/.test(cleanBase64);
+    if (!isValid) {
+        throw new Error("invalid_tweet_media_base64");
+    }
+}
+function validateTweetMedia({ type, mimeType, sizeBytes, }) {
+    if (!sizeBytes) {
+        throw new Error("empty_tweet_media_file");
+    }
+    if (type === "image") {
+        if (!ALLOWED_IMAGE_MIME_TYPES.has(mimeType)) {
+            throw new Error("unsupported_tweet_image_type");
+        }
+        if (sizeBytes >
+            MAX_IMAGE_SIZE_BYTES) {
+            throw new Error("tweet_image_too_large");
+        }
+        return;
+    }
+    if (!ALLOWED_VIDEO_MIME_TYPES.has(mimeType)) {
+        throw new Error("unsupported_tweet_video_type");
+    }
+    if (sizeBytes >
+        MAX_VIDEO_SIZE_BYTES) {
+        throw new Error("tweet_video_too_large");
+    }
+}
+function createUploadOptions(type) {
+    return {
+        folder: CLOUDINARY_TWEETS_FOLDER,
+        resource_type: type === "video"
+            ? "video"
+            : "image",
+        overwrite: false,
+        unique_filename: true,
+        use_filename: false,
+    };
+}
+function uploadBase64ToCloudinary(dataUrl, options) {
+    return new Promise((resolve, reject) => {
+        cloudinary_1.cloudinary.uploader.upload(dataUrl, options, (error, result) => {
+            if (error) {
+                console.error("[TWEET CLOUDINARY UPLOAD ERROR]", error);
+                reject(new Error(error.message ||
+                    "cloudinary_upload_failed"));
+                return;
+            }
+            if (!result) {
+                reject(new Error("cloudinary_empty_upload_result"));
+                return;
+            }
+            resolve(result);
+        });
+    });
+}
+function createVideoThumbnailUrl(publicId) {
+    return cloudinary_1.cloudinary.url(publicId, {
+        secure: true,
+        resource_type: "video",
+        format: "jpg",
+        transformation: [
+            {
+                width: 900,
+                height: 506,
+                crop: "fill",
+                gravity: "auto",
+                quality: "auto",
+            },
+        ],
+    });
+}
+async function uploadTweetMedia(input) {
+    const type = normalizeMediaType(input.type);
+    const dataUrl = ensureBase64DataUrl(input.base64, input.mimeType);
+    validateBase64Content(dataUrl);
+    const mimeType = getMimeTypeFromDataUrl(dataUrl) ||
+        normalizeMimeType(input.mimeType);
+    if (!mimeType) {
+        throw new Error("tweet_media_mime_type_required");
+    }
+    const sizeBytes = getBase64SizeBytes(dataUrl);
+    validateTweetMedia({
+        type,
+        mimeType,
+        sizeBytes,
+    });
+    console.log("[TWEET MEDIA UPLOAD START]", {
+        type,
+        mimeType,
+        sizeBytes,
+        folder: CLOUDINARY_TWEETS_FOLDER,
+    });
+    const result = await uploadBase64ToCloudinary(dataUrl, createUploadOptions(type));
+    const url = cleanText(result.secure_url);
+    const publicId = cleanText(result.public_id);
+    if (!url || !publicId) {
+        throw new Error("invalid_cloudinary_upload_result");
+    }
+    const thumbnailUrl = type === "video"
+        ? createVideoThumbnailUrl(publicId)
+        : url;
+    console.log("[TWEET MEDIA UPLOAD SUCCESS]", {
+        type,
+        url,
+        publicId,
+        width: result.width,
+        height: result.height,
+        duration: result.duration,
+    });
+    return {
+        type,
+        url,
+        publicId,
+        thumbnailUrl,
+        width: typeof result.width ===
+            "number"
+            ? result.width
+            : undefined,
+        height: typeof result.height ===
+            "number"
+            ? result.height
+            : undefined,
+        duration: typeof result.duration ===
+            "number"
+            ? result.duration
+            : undefined,
+    };
+}
+async function uploadTweetMediaList(mediaValue) {
+    if (!Array.isArray(mediaValue) ||
+        mediaValue.length === 0) {
+        return [];
+    }
+    const media = mediaValue.map((item) => {
+        if (!item ||
+            typeof item !==
+                "object") {
+            throw new Error("invalid_tweet_media_item");
+        }
+        const source = item;
+        return {
+            type: normalizeMediaType(source.type),
+            base64: cleanText(source.base64),
+            fileName: cleanText(source.fileName ??
+                source.file_name),
+            mimeType: cleanText(source.mimeType ??
+                source.mime_type),
+        };
+    });
+    const images = media.filter((item) => item.type === "image");
+    const videos = media.filter((item) => item.type === "video");
+    if (images.length > 0 &&
+        videos.length > 0) {
+        throw new Error("tweet_media_cannot_mix_images_and_video");
+    }
+    if (images.length >
+        MAX_IMAGES_PER_TWEET) {
+        throw new Error("tweet_images_limit_exceeded");
+    }
+    if (videos.length > 1) {
+        throw new Error("tweet_video_limit_exceeded");
+    }
+    const uploadedFiles = [];
+    try {
+        /*
+          نرفع بالتتابع حتى لا نضغط على الذاكرة
+          عند إرسال عدة صور Base64.
+        */
+        for (const item of media) {
+            const uploaded = await uploadTweetMedia(item);
+            uploadedFiles.push(uploaded);
+        }
+        return uploadedFiles;
+    }
+    catch (error) {
+        console.error("[TWEET MEDIA LIST UPLOAD ERROR]", error);
+        /*
+          إذا فشل ملف نحذف الملفات التي
+          تم رفعها في نفس العملية.
+        */
+        await deleteTweetMediaList(uploadedFiles);
+        throw error;
+    }
+}
+async function deleteTweetMedia(media) {
+    const publicId = cleanText(media.publicId ??
+        media.public_id);
+    if (!publicId) {
+        return false;
+    }
+    const type = cleanText(media.type).toLowerCase();
+    const resourceType = type === "video"
+        ? "video"
+        : "image";
+    try {
+        const result = await cloudinary_1.cloudinary.uploader.destroy(publicId, {
+            resource_type: resourceType,
+            invalidate: true,
+        });
+        console.log("[TWEET MEDIA DELETE RESULT]", {
+            publicId,
+            resourceType,
+            result: result.result,
+        });
+        return (result.result === "ok" ||
+            result.result ===
+                "not found");
+    }
+    catch (error) {
+        console.error("[TWEET MEDIA DELETE ERROR]", {
+            publicId,
+            resourceType,
+            error,
+        });
+        return false;
+    }
+}
+async function deleteTweetMediaList(mediaValue) {
+    if (!Array.isArray(mediaValue) ||
+        mediaValue.length === 0) {
+        return;
+    }
+    const media = mediaValue.filter((item) => item &&
+        typeof item === "object");
+    await Promise.allSettled(media.map((item) => deleteTweetMedia(item)));
+}
+//# sourceMappingURL=tweets.media.service.js.map
