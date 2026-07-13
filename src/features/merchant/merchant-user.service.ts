@@ -6,7 +6,7 @@ import {
   UserAccountType,
   UserModel,
 } from "../../models/User.model";
-
+import { merchantConfig } from "./merchant.config";
 import {
   MAX_ROOM_WELCOME_MESSAGE_LENGTH,
   MERCHANT_EDITABLE_FIELDS,
@@ -80,15 +80,24 @@ function isValidUrlOrEmpty(value: string): boolean {
 }
 
 export async function createUserFromMerchant(input: {
+  creatorUserId: string;
   username: string;
   requestedPassword?: string;
 }) {
-  /*
-    بناءً على طلبك:
-    اسم المستخدم مسموح أن يكون حرفًا واحدًا فقط.
-    الشرط الوحيد هنا أن الاسم ليس فارغًا.
-  */
-  const username = normalizeUsername(input.username);
+  const creatorUserId = clean(
+    input.creatorUserId
+  );
+
+  const username = normalizeUsername(
+    input.username
+  );
+
+  if (!creatorUserId) {
+    return {
+      ok: false as const,
+      reason: "creator_user_not_found",
+    };
+  }
 
   if (!username) {
     return {
@@ -97,55 +106,461 @@ export async function createUserFromMerchant(input: {
     };
   }
 
-  const exists = await UserModel.exists({ username });
+  /*
+    نتأكد أولًا أن الاسم غير موجود
+    قبل خصم النقاط.
+  */
+  const existingUser = await UserModel.exists({
+    username,
+  });
 
-  if (exists) {
+  if (existingUser) {
     return {
       ok: false as const,
       reason: "username_already_exists",
     };
   }
 
-  const userId = await generateUniqueUserId();
+  const cost =
+    merchantConfig.accountCreationCost;
 
-  const plainPassword =
-    clean(input.requestedPassword) || generatePassword();
+  /*
+    خصم ذري:
+    لا يتم الخصم إلا إذا كان رصيد المستخدم
+    أكبر من أو يساوي تكلفة إنشاء الحساب.
+  */
+  const creatorAfterDebit =
+    await UserModel.findOneAndUpdate(
+      {
+        userId: creatorUserId,
+        points: {
+          $gte: cost,
+        },
+      },
+      {
+        $inc: {
+          points: -cost,
+        },
+      },
+      {
+        new: true,
+        runValidators: true,
+      }
+    );
 
-  const hashedPassword = await bcrypt.hash(plainPassword, 12);
+  if (!creatorAfterDebit) {
+    const creatorExists =
+      await UserModel.exists({
+        userId: creatorUserId,
+      });
 
-  const user = await UserModel.create({
-    userId,
-    username,
-    password: hashedPassword,
+    if (!creatorExists) {
+      return {
+        ok: false as const,
+        reason: "creator_user_not_found",
+      };
+    }
 
-    platformRole: "user",
-    accountType: "none",
+    return {
+      ok: false as const,
+      reason: "insufficient_points",
+      requiredPoints: cost,
+    };
+  }
 
-    roomEntryMediaUrl: "",
-    profileEntryMediaUrl: "",
-    roomWelcomeMessage: "",
-    roomEntryEnabled: false,
-    profileEntryEnabled: false,
+  try {
+    const userId =
+      await generateUniqueUserId();
+
+    const plainPassword =
+      clean(input.requestedPassword) ||
+      generatePassword();
+
+    const hashedPassword =
+      await bcrypt.hash(
+        plainPassword,
+        12
+      );
+
+    const user = await UserModel.create({
+      userId,
+      username,
+      password: hashedPassword,
+
+      platformRole: "user",
+      accountType: "none",
+
+      roomEntryMediaUrl: "",
+      profileEntryMediaUrl: "",
+      roomWelcomeMessage: "",
+
+      roomEntryEnabled: false,
+      profileEntryEnabled: false,
+    });
+
+    console.log("[PAID_ACCOUNT_CREATED]", {
+      creatorUserId,
+      createdUserId: user.userId,
+      username: user.username,
+      cost,
+      remainingPoints:
+        creatorAfterDebit.points,
+    });
+
+    return {
+      ok: true as const,
+
+      user: {
+        userId: user.userId,
+        username: user.username,
+        platformRole: user.platformRole,
+        accountType: user.accountType,
+      },
+
+      plainPassword,
+      cost,
+
+      remainingPoints:
+        creatorAfterDebit.points,
+    };
+  } catch (error: any) {
+    /*
+      لو فشل إنشاء الحساب بعد الخصم،
+      نعيد النقاط للمستخدم.
+    */
+    await UserModel.updateOne(
+      {
+        userId: creatorUserId,
+      },
+      {
+        $inc: {
+          points: cost,
+        },
+      }
+    );
+
+    if (error?.code === 11000) {
+      return {
+        ok: false as const,
+        reason: "username_already_exists",
+      };
+    }
+
+    console.error(
+      "[PAID_ACCOUNT_CREATE_ERROR]",
+      error
+    );
+
+    return {
+      ok: false as const,
+      reason: "account_creation_failed",
+    };
+  }
+}
+export async function transferUserPoints(input: {
+  fromUserId: string;
+  target: string;
+  amount: number;
+  ownerUnlimited: boolean;
+}) {
+  const fromUserId = clean(
+    input.fromUserId
+  );
+
+  const targetValue = clean(
+    input.target
+  );
+
+  const amount = Number(input.amount);
+
+  if (!fromUserId || !targetValue) {
+    return {
+      ok: false as const,
+      reason: "invalid_transfer_target",
+    };
+  }
+
+  if (
+    !Number.isFinite(amount) ||
+    !Number.isInteger(amount) ||
+    amount <= 0
+  ) {
+    return {
+      ok: false as const,
+      reason: "invalid_transfer_amount",
+    };
+  }
+
+  if (
+    amount <
+    merchantConfig.pointTransferMinAmount
+  ) {
+    return {
+      ok: false as const,
+      reason: "transfer_amount_too_small",
+      minAmount:
+        merchantConfig.pointTransferMinAmount,
+    };
+  }
+
+  /*
+    الحد الأقصى لا يطبق على مالك الشات.
+  */
+  if (
+    !input.ownerUnlimited &&
+    amount >
+      merchantConfig.pointTransferMaxAmount
+  ) {
+    return {
+      ok: false as const,
+      reason: "transfer_amount_too_large",
+      maxAmount:
+        merchantConfig.pointTransferMaxAmount,
+    };
+  }
+
+  const sender = await UserModel.findOne({
+    userId: fromUserId,
   });
 
-  return {
-    ok: true as const,
+  if (!sender) {
+    return {
+      ok: false as const,
+      reason: "sender_user_not_found",
+    };
+  }
 
-    user: {
-      userId: user.userId,
-      username: user.username,
-      platformRole: user.platformRole,
-      accountType: user.accountType,
-    },
+  const targetUser =
+    await findMerchantTargetUser(
+      targetValue
+    );
 
+  if (!targetUser) {
+    return {
+      ok: false as const,
+      reason: "user_not_found",
+    };
+  }
+
+  if (
+    targetUser.userId === fromUserId
+  ) {
+    return {
+      ok: false as const,
+      reason: "cannot_transfer_to_yourself",
+    };
+  }
+
+  /*
+    مالك الشات:
+    يضيف النقاط للمستخدم دون خصمها من رصيده.
+  */
+  if (input.ownerUnlimited) {
+    const updatedTarget =
+      await UserModel.findOneAndUpdate(
+        {
+          userId: targetUser.userId,
+        },
+        {
+          $inc: {
+            points: amount,
+          },
+        },
+        {
+          new: true,
+          runValidators: true,
+        }
+      );
+
+    if (!updatedTarget) {
+      return {
+        ok: false as const,
+        reason: "user_not_found",
+      };
+    }
+
+    console.log(
+      "[OWNER_UNLIMITED_POINTS_TRANSFER]",
+      {
+        ownerUserId: fromUserId,
+        targetUserId:
+          updatedTarget.userId,
+        targetUsername:
+          updatedTarget.username,
+        amount,
+        targetNewBalance:
+          updatedTarget.points,
+      }
+    );
+
+    return {
+      ok: true as const,
+      ownerUnlimited: true,
+      amount,
+
+      sender: {
+        userId: sender.userId,
+        username: sender.username,
+        points: sender.points,
+      },
+
+      target: {
+        userId: updatedTarget.userId,
+        username:
+          updatedTarget.username,
+        points:
+          updatedTarget.points,
+      },
+    };
+  }
+
+  /*
+    المستخدم العادي:
+    خصم ذري بشرط امتلاكه رصيدًا كافيًا.
+  */
+  const senderAfterDebit =
+    await UserModel.findOneAndUpdate(
+      {
+        userId: fromUserId,
+        points: {
+          $gte: amount,
+        },
+      },
+      {
+        $inc: {
+          points: -amount,
+        },
+      },
+      {
+        new: true,
+        runValidators: true,
+      }
+    );
+
+  if (!senderAfterDebit) {
+    return {
+      ok: false as const,
+      reason: "insufficient_points",
+      requiredPoints: amount,
+    };
+  }
+
+  try {
+    const targetAfterCredit =
+      await UserModel.findOneAndUpdate(
+        {
+          userId: targetUser.userId,
+        },
+        {
+          $inc: {
+            points: amount,
+          },
+        },
+        {
+          new: true,
+          runValidators: true,
+        }
+      );
+
+    if (!targetAfterCredit) {
+      /*
+        إعادة النقاط للمرسل إذا تعذر
+        تحديث حساب المستقبل.
+      */
+      await UserModel.updateOne(
+        {
+          userId: fromUserId,
+        },
+        {
+          $inc: {
+            points: amount,
+          },
+        }
+      );
+
+      return {
+        ok: false as const,
+        reason: "user_not_found",
+      };
+    }
+
+    console.log(
+      "[USER_POINTS_TRANSFER]",
+      {
+        fromUserId,
+        fromUsername:
+          senderAfterDebit.username,
+
+        targetUserId:
+          targetAfterCredit.userId,
+
+        targetUsername:
+          targetAfterCredit.username,
+
+        amount,
+
+        senderNewBalance:
+          senderAfterDebit.points,
+
+        targetNewBalance:
+          targetAfterCredit.points,
+      }
+    );
+
+    return {
+      ok: true as const,
+      ownerUnlimited: false,
+      amount,
+
+      sender: {
+        userId:
+          senderAfterDebit.userId,
+
+        username:
+          senderAfterDebit.username,
+
+        points:
+          senderAfterDebit.points,
+      },
+
+      target: {
+        userId:
+          targetAfterCredit.userId,
+
+        username:
+          targetAfterCredit.username,
+
+        points:
+          targetAfterCredit.points,
+      },
+    };
+  } catch (error) {
     /*
-      تعرض مرة واحدة فقط في رسالة حساب merchant.
-      لا تحفظ كلمة المرور الصريحة في قاعدة البيانات.
+      إذا حدث خطأ غير متوقع بعد الخصم،
+      نعيد النقاط للمرسل.
     */
-    plainPassword,
-  };
-}
+    await UserModel.updateOne(
+      {
+        userId: fromUserId,
+      },
+      {
+        $inc: {
+          points: amount,
+        },
+      }
+    );
 
+    console.error(
+      "[POINT_TRANSFER_ERROR]",
+      error
+    );
+
+    return {
+      ok: false as const,
+      reason: "point_transfer_failed",
+    };
+  }
+}
 export async function findMerchantTargetUser(
   usernameOrUserId: string
 ) {

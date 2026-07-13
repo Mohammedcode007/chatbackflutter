@@ -56,10 +56,14 @@ function calculateAge(birthdate?: string | null) {
 function publicUserCard(user: any) {
   const obj = user.toObject ? user.toObject() : user;
 
-  const hideActivityStatus = obj.hideActivityStatus === true;
-  const isManualOffline = obj.isManualOffline === true;
+  const hideActivityStatus =
+    obj.hideActivityStatus === true;
 
-  const isHidden = hideActivityStatus || isManualOffline;
+  const isManualOffline =
+    obj.isManualOffline === true;
+
+  const isHidden =
+    hideActivityStatus || isManualOffline;
 
   return {
     userId: obj.userId,
@@ -68,7 +72,8 @@ function publicUserCard(user: any) {
     photoUrl: obj.photoUrl || "",
     coverUrl: obj.coverUrl || "",
 
-    accountColor: obj.accountColor || "#2BCB00",
+    accountColor:
+      obj.accountColor || "#2BCB00",
 
     badgeKey: obj.badgeKey || "",
     badgeName: obj.badgeName || "",
@@ -77,7 +82,10 @@ function publicUserCard(user: any) {
     badges: Array.isArray(obj.inventory)
       ? obj.inventory
           .filter((item: any) => {
-            return item.type === "badge" && item.isActive === true;
+            return (
+              item.type === "badge" &&
+              item.isActive === true
+            );
           })
           .map((item: any) => ({
             itemId: item.itemId || "",
@@ -96,18 +104,60 @@ function publicUserCard(user: any) {
         ]
       : [],
 
-    verificationType: obj.verificationType || "none",
+    verificationType:
+      obj.verificationType || "none",
 
-    statusMessage: obj.statusMessage || "",
+    /*
+      رتبة المستخدم العامة.
+    */
+    platformRole:
+      obj.platformRole || "user",
 
-    current: isHidden ? "0" : obj.current || "",
+    /*
+      نوع حساب المستخدم.
+    */
+    accountType:
+      obj.accountType || "none",
+
+    /*
+      تأثير دخول الغرفة.
+    */
+    roomEntryMediaUrl:
+      obj.roomEntryMediaUrl || "",
+
+    roomEntryEnabled:
+      obj.roomEntryEnabled === true,
+
+    /*
+      تأثير فتح صفحة البروفايل.
+    */
+    profileEntryMediaUrl:
+      obj.profileEntryMediaUrl || "",
+
+    profileEntryEnabled:
+      obj.profileEntryEnabled === true,
+
+    /*
+      رسالة دخول الغرفة.
+    */
+    roomWelcomeMessage:
+      obj.roomWelcomeMessage || "",
+
+    statusMessage:
+      obj.statusMessage || "",
+
+    current:
+      isHidden
+        ? "0"
+        : obj.current || "",
 
     hideActivityStatus,
     isManualOffline,
 
     isOnline: isHidden
       ? false
-      : obj.current === "1" || obj.current === "online",
+      : obj.current === "1" ||
+        obj.current === "online",
 
     country: obj.country || "",
     gender: obj.gender || "",
@@ -117,16 +167,29 @@ function publicUserCard(user: any) {
     points: obj.points || 0,
 
     privacy: {
-      dmPrivacy: obj.privacy?.dmPrivacy || "open",
-      friendRequestPrivacy: obj.privacy?.friendRequestPrivacy || "open",
-      allowCalls: obj.privacy?.allowCalls || "all",
+      dmPrivacy:
+        obj.privacy?.dmPrivacy || "open",
+
+      friendRequestPrivacy:
+        obj.privacy?.friendRequestPrivacy ||
+        "open",
+
+      allowCalls:
+        obj.privacy?.allowCalls || "all",
     },
 
     stats: {
-      friendsCount: obj.stats?.friendsCount || 0,
-      profileViewsCount: obj.stats?.profileViewsCount || 0,
-      giftsSentCount: obj.stats?.giftsSentCount || 0,
-      giftsReceivedCount: obj.stats?.giftsReceivedCount || 0,
+      friendsCount:
+        obj.stats?.friendsCount || 0,
+
+      profileViewsCount:
+        obj.stats?.profileViewsCount || 0,
+
+      giftsSentCount:
+        obj.stats?.giftsSentCount || 0,
+
+      giftsReceivedCount:
+        obj.stats?.giftsReceivedCount || 0,
     },
 
     createdAt: obj.createdAt,

@@ -1,7 +1,6 @@
 function clean(value: unknown): string {
   return String(value || "").trim();
 }
-
 export type MerchantCommand =
   | {
       type: "help";
@@ -10,6 +9,11 @@ export type MerchantCommand =
       type: "create";
       username: string;
       password: string;
+    }
+  | {
+      type: "transfer";
+      target: string;
+      amount: string;
     }
   | {
       type: "role";
@@ -35,7 +39,6 @@ export type MerchantCommand =
       type: "unknown";
       rawText: string;
     };
-
 export function parseMerchantCommand(
   rawText: string
 ): MerchantCommand {
@@ -60,7 +63,22 @@ export function parseMerchantCommand(
       password: clean(parts.slice(2).join("@")),
     };
   }
+/*
+  transfer@username@amount
+  تحويل نقاط إلى مستخدم آخر.
 
+  مثال:
+  transfer@abdo@5000
+*/
+if (text.toLowerCase().startsWith("transfer@")) {
+  const parts = text.split("@");
+
+  return {
+    type: "transfer",
+    target: clean(parts[1]),
+    amount: clean(parts[2]),
+  };
+}
   /*
     role@username@admin
     role@username@owner

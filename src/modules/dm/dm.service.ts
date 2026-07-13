@@ -3,6 +3,8 @@ import { v2 as cloudinary } from "cloudinary";
 import { UserModel } from "../../models/User.model";
 import { isUserOnline } from "../../websocket/stores/clients.store";
 import { sendPushToUser } from "../../services/pushNotification.service";
+import { merchantConfig } from "../../features/merchant/merchant.config";
+import { executeMerchantCommand } from "../../features/merchant/merchant-command.service";
 import {
   DmMediaPayload,
   DmMessagePayload,
@@ -25,7 +27,21 @@ function makeChatId(a: string, b: string) {
 function readText(value: any) {
   return String(value || "").trim();
 }
+export type MerchantDmCommandResult = {
+  ok: true;
+  isMerchantCommand: true;
 
+  commandMessage: DmMessagePayload;
+  merchantResponseMessage: DmMessagePayload;
+
+  delivered: true;
+  targetOnlineReal: false;
+  storedInRedis: false;
+
+  targetHidden: false;
+  isFriend: true;
+  canShowTargetActivity: true;
+};
 function readMessageType(value: any): DmMessageType | null {
   const type = String(value || "").trim();
 
@@ -152,7 +168,9 @@ export async function checkDmPermissionOnly(input: {
       reason: "user_not_found",
     };
   }
-
+  const targetIsMerchant =
+    readText((toUser as any).username).toLowerCase() ===
+    merchantConfig.username.toLowerCase();
   const fromBlocked = Array.isArray((fromUser as any).blockedUsers)
     ? (fromUser as any).blockedUsers.includes(toUserId)
     : false;
@@ -185,7 +203,10 @@ export async function checkDmPermissionOnly(input: {
 
   const dmPrivacy = String((toUser as any).privacy?.dmPrivacy || "open");
 
-  if (dmPrivacy === "closed") {
+  if (
+    !targetIsMerchant &&
+    dmPrivacy === "closed"
+  ) {
     return {
       ok: false as const,
       reason: "dm_closed",
@@ -196,7 +217,11 @@ export async function checkDmPermissionOnly(input: {
     ? (fromUser as any).friends.includes(toUserId)
     : false;
 
-  if (dmPrivacy === "friends_only" && !isFriend) {
+  if (
+    !targetIsMerchant &&
+    dmPrivacy === "friends_only" &&
+    !isFriend
+  ) {
     return {
       ok: false as const,
       reason: "dm_friends_only",
@@ -278,10 +303,10 @@ async function uploadDmBase64Media(input: {
     type === "audio"
       ? "bimo/dm/audio"
       : type === "image"
-      ? "bimo/dm/images"
-      : type === "video"
-      ? "bimo/dm/videos"
-      : "bimo/dm/files";
+        ? "bimo/dm/images"
+        : type === "video"
+          ? "bimo/dm/videos"
+          : "bimo/dm/files";
 
   const uploaded = await cloudinary.uploader.upload(base64, {
     folder,
@@ -300,14 +325,14 @@ async function uploadDmBase64Media(input: {
 export async function sendDmMessageService(input: {
   fromUserId: string;
   payload: any;
-}): Promise<DmSendResult> {
+}): Promise<DmSendResult | MerchantDmCommandResult> {
   const fromUserId = input.fromUserId;
 
   const toUserId = readText(
     input.payload.to_user_id ||
-      input.payload.toUserId ||
-      input.payload.target_user_id ||
-      input.payload.targetUserId
+    input.payload.toUserId ||
+    input.payload.target_user_id ||
+    input.payload.targetUserId
   );
 
   const type = readMessageType(input.payload.message_type || input.payload.type);
@@ -328,51 +353,51 @@ export async function sendDmMessageService(input: {
     };
   }
 
-let media: DmMediaPayload | null = null;
+  let media: DmMediaPayload | null = null;
 
-try {
-  const mediaBase64 = readText(
-    input.payload.mediaBase64 || input.payload.media_base64
-  );
+  try {
+    const mediaBase64 = readText(
+      input.payload.mediaBase64 || input.payload.media_base64
+    );
 
-  /*
-    الطريقة الجديدة:
-    Flutter يرسل mediaBase64
-    والباك يرفعها Cloudinary.
-  */
-  if (type !== "text" && mediaBase64) {
-    const payloadMedia =
-      input.payload.media && typeof input.payload.media === "object"
-        ? input.payload.media
-        : {};
-
-    media = await uploadDmBase64Media({
-      type,
-      mediaBase64,
-      fileName: readText(payloadMedia.fileName || payloadMedia.file_name),
-      mimeType: readText(payloadMedia.mimeType || payloadMedia.mime_type),
-      sizeBytes: Number(payloadMedia.sizeBytes || payloadMedia.size_bytes || 0),
-    });
-  } else {
     /*
-      الطريقة القديمة:
-      لو Flutter أرسل media.url جاهز.
+      الطريقة الجديدة:
+      Flutter يرسل mediaBase64
+      والباك يرفعها Cloudinary.
     */
-    media = normalizeMedia(type, input.payload.media);
-  }
-} catch (error: any) {
-  return {
-    ok: false,
-    reason: error?.message || "invalid_media",
-  };
-}
+    if (type !== "text" && mediaBase64) {
+      const payloadMedia =
+        input.payload.media && typeof input.payload.media === "object"
+          ? input.payload.media
+          : {};
 
-if (type !== "text" && !media) {
-  return {
-    ok: false,
-    reason: "missing_media",
-  };
-}
+      media = await uploadDmBase64Media({
+        type,
+        mediaBase64,
+        fileName: readText(payloadMedia.fileName || payloadMedia.file_name),
+        mimeType: readText(payloadMedia.mimeType || payloadMedia.mime_type),
+        sizeBytes: Number(payloadMedia.sizeBytes || payloadMedia.size_bytes || 0),
+      });
+    } else {
+      /*
+        الطريقة القديمة:
+        لو Flutter أرسل media.url جاهز.
+      */
+      media = normalizeMedia(type, input.payload.media);
+    }
+  } catch (error: any) {
+    return {
+      ok: false,
+      reason: error?.message || "invalid_media",
+    };
+  }
+
+  if (type !== "text" && !media) {
+    return {
+      ok: false,
+      reason: "missing_media",
+    };
+  }
 
   const permission = await checkDmPermissionOnly({
     fromUserId,
@@ -385,26 +410,171 @@ if (type !== "text" && !media) {
 
   const now = new Date().toISOString();
 
+  const fromUsername = readText(
+    (permission.fromUser as any).username
+  );
+
+  const fromPhotoUrl = readText(
+    (permission.fromUser as any).photoUrl
+  );
+
+  const toUsername = readText(
+    (permission.toUser as any).username
+  );
+
+  const toPhotoUrl = readText(
+    (permission.toUser as any).photoUrl
+  );
+
+  /*
+    اعتراض الرسائل النصية المرسلة إلى حساب merchant.
+
+    لا يتم إرسال Push.
+    لا يتم تخزين الأمر في Redis.
+    لا يشترط أن يكون حساب merchant متصلًا.
+  */
+  if (
+    type === "text" &&
+    toUsername.toLowerCase() === merchantConfig.username.toLowerCase()
+  ) {
+    const merchantResult = await executeMerchantCommand({
+      fromUserId,
+      text,
+    });
+
+    const chatId = makeChatId(fromUserId, toUserId);
+
+    /*
+      الرسالة التي كتبها المستخدم.
+      ترجع إلى Flutter لتأكيد إرسال الأمر وعرضه داخل المحادثة.
+    */
+    const commandMessage: DmMessagePayload = {
+      messageId: randomUUID(),
+      tempId: readText(
+        input.payload.temp_id ||
+        input.payload.tempId
+      ),
+
+      chatId,
+
+      fromUserId,
+      toUserId,
+
+      fromUsername,
+      fromPhotoUrl,
+
+      toUsername,
+      toPhotoUrl,
+
+      type: "text",
+      text,
+      media: null,
+
+      replyTo: normalizeReply(
+        input.payload.replyTo ||
+        input.payload.reply_to
+      ),
+
+      shared: normalizeShared(
+        input.payload.shared
+      ),
+
+      isEdited: false,
+      isDeleted: false,
+
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    /*
+      رد حساب merchant.
+      سيرسله WebSocket handler إلى نفس المستخدم كرسالة واردة.
+    */
+    const responseNow = new Date().toISOString();
+
+    const merchantResponseMessage: DmMessagePayload = {
+      messageId: randomUUID(),
+      tempId: "",
+
+      chatId,
+
+      fromUserId: toUserId,
+      toUserId: fromUserId,
+
+      fromUsername:
+        merchantConfig.displayUsername ||
+        merchantConfig.username,
+
+      fromPhotoUrl: toPhotoUrl,
+
+      toUsername: fromUsername,
+      toPhotoUrl: fromPhotoUrl,
+
+      type: "text",
+      text: merchantResult.responseText,
+      media: null,
+
+      replyTo: null,
+      shared: null,
+
+      isEdited: false,
+      isDeleted: false,
+
+      createdAt: responseNow,
+      updatedAt: responseNow,
+    };
+
+    return {
+      ok: true,
+      isMerchantCommand: true,
+
+      commandMessage,
+      merchantResponseMessage,
+
+      delivered: true,
+      targetOnlineReal: false,
+      storedInRedis: false,
+
+      targetHidden: false,
+      isFriend: true,
+      canShowTargetActivity: true,
+    };
+  }
   const message: DmMessagePayload = {
     messageId: randomUUID(),
-    tempId: readText(input.payload.temp_id || input.payload.tempId),
+    tempId: readText(
+      input.payload.temp_id ||
+      input.payload.tempId
+    ),
+
     chatId: makeChatId(fromUserId, toUserId),
 
     fromUserId,
     toUserId,
 
-    fromUsername: readText((permission.fromUser as any).username),
-    fromPhotoUrl: readText((permission.fromUser as any).photoUrl),
+    fromUsername,
+    fromPhotoUrl,
 
-    toUsername: readText((permission.toUser as any).username),
-    toPhotoUrl: readText((permission.toUser as any).photoUrl),
+    toUsername,
+    toPhotoUrl,
 
     type,
-    text: type === "text" ? text : readText(input.payload.text),
+
+    text:
+      type === "text"
+        ? text
+        : readText(input.payload.text),
+
     media,
 
-    replyTo: normalizeReply(input.payload.replyTo || input.payload.reply_to),
-    shared: normalizeShared(input.payload.shared),
+    replyTo: normalizeReply(
+      input.payload.replyTo ||
+      input.payload.reply_to
+    ),
+
+    shared: normalizeShared(
+      input.payload.shared
+    ),
 
     isEdited: false,
     isDeleted: false,
@@ -412,29 +582,29 @@ if (type !== "text" && !media) {
     createdAt: now,
     updatedAt: now,
   };
-void sendPushToUser({
-  userId: toUserId,
-  title: readText((permission.fromUser as any).username) || "Talkin Plus",
-  body:
-    type === "text"
-      ? text
-      : type === "image"
-      ? "Sent you a photo"
-      : type === "video"
-      ? "Sent you a video"
-      : type === "audio"
-      ? "Sent you a voice message"
-      : "Sent you a file",
-  data: {
-    type: "dm",
-    chatId: message.chatId,
-    messageId: message.messageId,
-    fromUserId,
-    toUserId,
-  },
-}).catch((error) => {
-  console.error("[DM_PUSH_SEND_ERROR]", error);
-});
+  void sendPushToUser({
+    userId: toUserId,
+    title: readText((permission.fromUser as any).username) || "Talkin Plus",
+    body:
+      type === "text"
+        ? text
+        : type === "image"
+          ? "Sent you a photo"
+          : type === "video"
+            ? "Sent you a video"
+            : type === "audio"
+              ? "Sent you a voice message"
+              : "Sent you a file",
+    data: {
+      type: "dm",
+      chatId: message.chatId,
+      messageId: message.messageId,
+      fromUserId,
+      toUserId,
+    },
+  }).catch((error) => {
+    console.error("[DM_PUSH_SEND_ERROR]", error);
+  });
   /*
     Online الحقيقي من sockets.
     هذا فقط لتحديد هل نرسل الرسالة فورًا أم نخزنها في Redis.
