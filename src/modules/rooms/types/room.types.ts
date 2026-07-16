@@ -402,7 +402,10 @@ export type RoomEntryVideoPayload = {
 */
 export type RoomReplyPayload = {
   messageId: string;
+
   fromUserId: string;
+  fromUsername: string;
+
   text: string;
   type: string;
   mediaUrl: string;
@@ -422,12 +425,31 @@ export type RoomMentionPayload = {
   ملاحظة:
   بما أن الرسائل لا تحفظ، الرياكشن يعيش طالما الرسالة موجودة عند العملاء فقط.
 */
-export type RoomReactionPayload = {
+/*
+  بيانات المستخدم الذي قام بعمل Reaction.
+*/
+export type RoomReactionUserPayload = {
   userId: string;
-  emoji: string;
+  username: string;
+  photoUrl: string;
   createdAt: string;
 };
 
+/*
+  Reaction مجمّع حسب الإيموجي.
+
+  مثال:
+  {
+    emoji: "❤️",
+    count: 2,
+    users: [...]
+  }
+*/
+export type RoomReactionPayload = {
+  emoji: string;
+  count: number;
+  users: RoomReactionUserPayload[];
+};
 /*
   بيانات system message.
 */

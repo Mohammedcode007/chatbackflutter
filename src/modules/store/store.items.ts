@@ -1,5 +1,408 @@
 
 
+// export type StoreItemType =
+//   | "account_color"
+//   | "badge"
+//   | "image_badge"
+//   | "lottie_badge"
+//   | "verification";
+
+// export type StoreItem = {
+//   itemId: string;
+//   type: StoreItemType;
+//   key: string;
+//   name: string;
+//   value: string;
+//   price: number;
+//   durationDays: number;
+//     disableBadge?: boolean;
+// };
+
+// export type StoreItemGroup =
+//   | "account_color"
+//   | "badge_group"
+//   | "verification";
+
+// export const STORE_PRICES = {
+//   account_color: 100,
+//   badge: 200,
+//   image_badge: 300,
+//   lottie_badge: 500,
+//   verification: 1000,
+// } as const;
+
+// export const STORE_DURATION_DAYS = 30;
+
+// export const STORE_ITEMS: StoreItem[] = [
+//   // Colors
+//   {
+//     itemId: "color_green",
+//     type: "account_color",
+//     key: "green",
+//     name: "Green",
+//     value: "#2BCB00",
+//     price: STORE_PRICES.account_color,
+//     durationDays: STORE_DURATION_DAYS,
+//   },
+//   {
+//     itemId: "color_blue",
+//     type: "account_color",
+//     key: "blue",
+//     name: "Blue",
+//     value: "#3B82F6",
+//     price: STORE_PRICES.account_color,
+//     durationDays: STORE_DURATION_DAYS,
+//   },
+//   {
+//     itemId: "color_purple",
+//     type: "account_color",
+//     key: "purple",
+//     name: "Purple",
+//     value: "#8B5CF6",
+//     price: STORE_PRICES.account_color,
+//     durationDays: STORE_DURATION_DAYS,
+//   },
+//   {
+//     itemId: "color_gold",
+//     type: "account_color",
+//     key: "gold",
+//     name: "Gold",
+//     value: "#F59E0B",
+//     price: STORE_PRICES.account_color,
+//     durationDays: STORE_DURATION_DAYS,
+//   },
+//   {
+//     itemId: "color_red",
+//     type: "account_color",
+//     key: "red",
+//     name: "Red",
+//     value: "#EF4444",
+//     price: STORE_PRICES.account_color,
+//     durationDays: STORE_DURATION_DAYS,
+//   },
+//   {
+//     itemId: "color_pink",
+//     type: "account_color",
+//     key: "pink",
+//     name: "Pink",
+//     value: "#EC4899",
+//     price: STORE_PRICES.account_color,
+//     durationDays: STORE_DURATION_DAYS,
+//   },
+//   {
+//     itemId: "color_teal",
+//     type: "account_color",
+//     key: "teal",
+//     name: "Teal",
+//     value: "#14B8A6",
+//     price: STORE_PRICES.account_color,
+//     durationDays: STORE_DURATION_DAYS,
+//   },
+
+//   // Emoji Badges القديمة
+//   {
+//     itemId: "badge_star",
+//     type: "badge",
+//     key: "star",
+//     name: "Star Badge",
+//     value: "⭐",
+//     price: STORE_PRICES.badge,
+//     durationDays: STORE_DURATION_DAYS,
+//   },
+//   {
+//     itemId: "badge_crown",
+//     type: "badge",
+//     key: "crown",
+//     name: "Crown Badge",
+//     value: "👑",
+//     price: STORE_PRICES.badge,
+//     durationDays: STORE_DURATION_DAYS,
+//   },
+//   {
+//     itemId: "badge_fire",
+//     type: "badge",
+//     key: "fire",
+//     name: "Fire Badge",
+//     value: "🔥",
+//     price: STORE_PRICES.badge,
+//     durationDays: STORE_DURATION_DAYS,
+//   },
+//   {
+//     itemId: "badge_diamond",
+//     type: "badge",
+//     key: "diamond",
+//     name: "Diamond Badge",
+//     value: "💎",
+//     price: STORE_PRICES.badge,
+//     durationDays: STORE_DURATION_DAYS,
+//   },
+
+//   // Image Badges الجديدة
+//   {
+//     itemId: "image_badge_eagle",
+//     type: "image_badge",
+//     key: "eagle",
+//     name: "Eagle Badge",
+//     value: "tps://te-bot.site/chatbackflutter/uploads/badges/eagle.png",
+//     price: STORE_PRICES.image_badge,
+//     durationDays: STORE_DURATION_DAYS,
+//   },
+//   {
+//     itemId: "image_badge_lion",
+//     type: "image_badge",
+//     key: "lion",
+//     name: "Lion Badge",
+//     value:
+//       "https://te-bot.site/chatbackflutter/uploads/badges/lion.png?v=101",
+//     price: STORE_PRICES.image_badge,
+//     durationDays: STORE_DURATION_DAYS,
+//   },
+//   {
+//     itemId: "image_badge_skull",
+//     type: "image_badge",
+//     key: "skull",
+//     name: "Skull Badge",
+//     value: "https://te-bot.site/chatbackflutter/uploads/badges/skull.png",
+//     price: STORE_PRICES.image_badge,
+//     durationDays: STORE_DURATION_DAYS,
+//   },
+//   {
+//   itemId: "image_badge_heart",
+//   type: "image_badge",
+//   key: "heart",
+//   name: "Heart Badge",
+//   value: "https://te-bot.site/chatbackflutter/uploads/badges/heart.png?v=101",
+//   price: STORE_PRICES.image_badge,
+//   durationDays: STORE_DURATION_DAYS,
+// },
+// {
+//   itemId: "image_badge_wolf",
+//   type: "image_badge",
+//   key: "wolf",
+//   name: "Wolf Badge",
+//   value: "https://te-bot.site/chatbackflutter/uploads/badges/wolf.png?v=101",
+//   price: STORE_PRICES.image_badge,
+//   durationDays: STORE_DURATION_DAYS,
+// },
+
+// {
+//   itemId: "lottie_badge_teddy",
+//   type: "lottie_badge",
+//   key: "teddy",
+//   name: "Teddy Lottie",
+//   value: "https://te-bot.site/chatbackflutter/uploads/badges/Teddy.json",
+//   price: STORE_PRICES.lottie_badge,
+//   durationDays: STORE_DURATION_DAYS,
+// },
+// {
+//   itemId: "lottie_badge_blind",
+//   type: "lottie_badge",
+//   key: "blind",
+//   name: "Blind Lottie",
+//   value: "https://te-bot.site/chatbackflutter/uploads/badges/blind.json",
+//   price: STORE_PRICES.lottie_badge,
+//   durationDays: STORE_DURATION_DAYS,
+// },
+// {
+//   itemId: "lottie_badge_love",
+//   type: "lottie_badge",
+//   key: "love",
+//   name: "Love Lottie",
+//   value: "https://te-bot.site/chatbackflutter/uploads/badges/love.json",
+//   price: STORE_PRICES.lottie_badge,
+//   durationDays: STORE_DURATION_DAYS,
+// },
+// {
+//   itemId: "lottie_badge_skull",
+//   type: "lottie_badge",
+//   key: "skull",
+//   name: "Skull Lottie",
+//   value: "https://te-bot.site/chatbackflutter/uploads/badges/skull.json",
+//   price: STORE_PRICES.lottie_badge,
+//   durationDays: STORE_DURATION_DAYS,
+// },
+// {
+//   itemId: "lottie_badge_snake",
+//   type: "lottie_badge",
+//   key: "snake",
+//   name: "Snake Lottie",
+//   value: "https://te-bot.site/chatbackflutter/uploads/badges/Snake.json",
+//   price: STORE_PRICES.lottie_badge,
+//   durationDays: STORE_DURATION_DAYS,
+// },
+// {
+//   itemId: "lottie_badge_climb",
+//   type: "lottie_badge",
+//   key: "climb",
+//   name: "Climb Lottie",
+//   value: "https://te-bot.site/chatbackflutter/uploads/badges/ClMB.json",
+//   price: STORE_PRICES.lottie_badge,
+//   durationDays: STORE_DURATION_DAYS,
+// },
+// {
+//   itemId: "lottie_badge_money",
+//   type: "lottie_badge",
+//   key: "money",
+//   name: "Money Lottie",
+//   value: "https://te-bot.site/chatbackflutter/uploads/badges/Money.json",
+//   price: STORE_PRICES.lottie_badge,
+//   durationDays: STORE_DURATION_DAYS,
+// },
+// {
+//   itemId: "lottie_badge_koala",
+//   type: "lottie_badge",
+//   key: "koala",
+//   name: "Koala Lottie",
+//   value: "https://te-bot.site/chatbackflutter/uploads/badges/Koala.json",
+//   price: STORE_PRICES.lottie_badge,
+//   durationDays: STORE_DURATION_DAYS,
+// },
+// {
+//   itemId: "lottie_badge_panda",
+//   type: "lottie_badge",
+//   key: "panda",
+//   name: "Panda Lottie",
+//   value: "https://te-bot.site/chatbackflutter/uploads/badges/panda.json",
+//   price: STORE_PRICES.lottie_badge,
+//   durationDays: STORE_DURATION_DAYS,
+// },
+// {
+//   itemId: "lottie_badge_bird",
+//   type: "lottie_badge",
+//   key: "bird",
+//   name: "Bird Lottie",
+//   value: "https://te-bot.site/chatbackflutter/uploads/badges/bird.json",
+//   price: STORE_PRICES.lottie_badge,
+//   durationDays: STORE_DURATION_DAYS,
+// },
+// {
+//   itemId: "lottie_badge_itshot",
+//   type: "lottie_badge",
+//   key: "itshot",
+//   name: "Itshot Lottie",
+//   value: "https://te-bot.site/chatbackflutter/uploads/badges/itshot.json",
+//   price: STORE_PRICES.lottie_badge,
+//   durationDays: STORE_DURATION_DAYS,
+// },
+// {
+//   itemId: "lottie_badge_spider",
+//   type: "lottie_badge",
+//   key: "spider",
+//   name: "Spider Lottie",
+//   value: "https://te-bot.site/chatbackflutter/uploads/badges/Spider.json",
+//   price: STORE_PRICES.lottie_badge,
+//   durationDays: STORE_DURATION_DAYS,
+// },
+// {
+//   itemId: "lottie_badge_cat",
+//   type: "lottie_badge",
+//   key: "cat",
+//   name: "Cat Lottie",
+//   value: "https://te-bot.site/chatbackflutter/uploads/badges/cat.json",
+//   price: STORE_PRICES.lottie_badge,
+//   durationDays: STORE_DURATION_DAYS,
+// },
+// {
+//   itemId: "lottie_badge_butterfly",
+//   type: "lottie_badge",
+//   key: "butterfly",
+//   name: "Butterfly Lottie",
+//   value: "https://te-bot.site/chatbackflutter/uploads/badges/Butterfly.json",
+//   price: STORE_PRICES.lottie_badge,
+//   durationDays: STORE_DURATION_DAYS,
+// },
+
+//   // Lottie Badges الجديدة
+//   {
+//     itemId: "lottie_badge_eagle_fire",
+//     type: "lottie_badge",
+//     key: "eagle_fire",
+//     name: "Eagle Fire Lottie",
+//     value: "tps://te-bot.site/chatbackflutter/uploads/badges/eagle-fire.json",
+//     price: STORE_PRICES.lottie_badge,
+//     durationDays: STORE_DURATION_DAYS,
+//   },
+//   {
+//     itemId: "lottie_badge_lion_gold",
+//     type: "lottie_badge",
+//     key: "lion_gold",
+//     name: "Lion Gold Lottie",
+//     value: "tps://te-bot.site/chatbackflutter/uploads/badges/lion-gold.json",
+//     price: STORE_PRICES.lottie_badge,
+//     durationDays: STORE_DURATION_DAYS,
+//   },
+//   {
+//     itemId: "lottie_badge_skull_dark",
+//     type: "lottie_badge",
+//     key: "skull_dark",
+//     name: "Skull Dark Lottie",
+//     value: "https://te-bot.site/chatbackflutter/uploads/badges/Skull1.json",
+//     price: STORE_PRICES.lottie_badge,
+//     durationDays: STORE_DURATION_DAYS,
+//   },
+// {
+//   itemId: "lottie_badge_batman_dark",
+//   type: "lottie_badge",
+//   key: "batman_dark",
+//   name: "Batman Dark Lottie",
+//   value: "https://te-bot.site/chatbackflutter/uploads/badges/bat1.json",
+//   price: STORE_PRICES.lottie_badge,
+//   durationDays: STORE_DURATION_DAYS,
+// },
+//   // Verification
+//   {
+//     itemId: "verify_blue",
+//     type: "verification",
+//     key: "blue",
+//     name: "Blue Verification",
+//     value: "blue",
+//     price: STORE_PRICES.verification,
+//     durationDays: STORE_DURATION_DAYS,
+//   },
+//   {
+//     itemId: "verify_gold",
+//     type: "verification",
+//     key: "gold",
+//     name: "Gold Verification",
+//     value: "gold",
+//     price: STORE_PRICES.verification,
+//     durationDays: STORE_DURATION_DAYS,
+//   },
+//   {
+//     itemId: "verify_business",
+//     type: "verification",
+//     key: "business",
+//     name: "Business Verification",
+//     value: "business",
+//     price: STORE_PRICES.verification,
+//     durationDays: STORE_DURATION_DAYS,
+//   },
+// ];
+
+// export function findStoreItem(itemId: string) {
+//   return STORE_ITEMS.find((item) => item.itemId === itemId);
+// }
+
+// export function getStoreItemGroup(type: StoreItemType): StoreItemGroup {
+//   if (
+//     type === "badge" ||
+//     type === "image_badge" ||
+//     type === "lottie_badge"
+//   ) {
+//     return "badge_group";
+//   }
+
+//   return type;
+// }
+
+// export function isBadgeStoreItemType(type: StoreItemType) {
+//   return (
+//     type === "badge" ||
+//     type === "image_badge" ||
+//     type === "lottie_badge"
+//   );
+// }
+
 export type StoreItemType =
   | "account_color"
   | "badge"
@@ -15,6 +418,7 @@ export type StoreItem = {
   value: string;
   price: number;
   durationDays: number;
+    disableBadge?: boolean;
 };
 
 export type StoreItemGroup =
@@ -33,9 +437,9 @@ export const STORE_PRICES = {
 export const STORE_DURATION_DAYS = 30;
 
 export const STORE_ITEMS: StoreItem[] = [
-  // Colors
+  // Account Colors
   {
-    itemId: "color_green",
+    itemId: "account_color_01",
     type: "account_color",
     key: "green",
     name: "Green",
@@ -44,7 +448,7 @@ export const STORE_ITEMS: StoreItem[] = [
     durationDays: STORE_DURATION_DAYS,
   },
   {
-    itemId: "color_blue",
+    itemId: "account_color_02",
     type: "account_color",
     key: "blue",
     name: "Blue",
@@ -53,7 +457,7 @@ export const STORE_ITEMS: StoreItem[] = [
     durationDays: STORE_DURATION_DAYS,
   },
   {
-    itemId: "color_purple",
+    itemId: "account_color_03",
     type: "account_color",
     key: "purple",
     name: "Purple",
@@ -62,7 +466,7 @@ export const STORE_ITEMS: StoreItem[] = [
     durationDays: STORE_DURATION_DAYS,
   },
   {
-    itemId: "color_gold",
+    itemId: "account_color_04",
     type: "account_color",
     key: "gold",
     name: "Gold",
@@ -71,7 +475,7 @@ export const STORE_ITEMS: StoreItem[] = [
     durationDays: STORE_DURATION_DAYS,
   },
   {
-    itemId: "color_red",
+    itemId: "account_color_05",
     type: "account_color",
     key: "red",
     name: "Red",
@@ -80,7 +484,7 @@ export const STORE_ITEMS: StoreItem[] = [
     durationDays: STORE_DURATION_DAYS,
   },
   {
-    itemId: "color_pink",
+    itemId: "account_color_06",
     type: "account_color",
     key: "pink",
     name: "Pink",
@@ -89,11 +493,398 @@ export const STORE_ITEMS: StoreItem[] = [
     durationDays: STORE_DURATION_DAYS,
   },
   {
-    itemId: "color_teal",
+    itemId: "account_color_07",
     type: "account_color",
     key: "teal",
     name: "Teal",
     value: "#14B8A6",
+    price: STORE_PRICES.account_color,
+    durationDays: STORE_DURATION_DAYS,
+  },
+  {
+    itemId: "account_color_08",
+    type: "account_color",
+    key: "cyan",
+    name: "Cyan",
+    value: "#06B6D4",
+    price: STORE_PRICES.account_color,
+    durationDays: STORE_DURATION_DAYS,
+  },
+  {
+    itemId: "account_color_09",
+    type: "account_color",
+    key: "sky",
+    name: "Sky",
+    value: "#0EA5E9",
+    price: STORE_PRICES.account_color,
+    durationDays: STORE_DURATION_DAYS,
+  },
+  {
+    itemId: "account_color_10",
+    type: "account_color",
+    key: "indigo",
+    name: "Indigo",
+    value: "#6366F1",
+    price: STORE_PRICES.account_color,
+    durationDays: STORE_DURATION_DAYS,
+  },
+  {
+    itemId: "account_color_11",
+    type: "account_color",
+    key: "violet",
+    name: "Violet",
+    value: "#7C3AED",
+    price: STORE_PRICES.account_color,
+    durationDays: STORE_DURATION_DAYS,
+  },
+  {
+    itemId: "account_color_12",
+    type: "account_color",
+    key: "fuchsia",
+    name: "Fuchsia",
+    value: "#C026D3",
+    price: STORE_PRICES.account_color,
+    durationDays: STORE_DURATION_DAYS,
+  },
+  {
+    itemId: "account_color_13",
+    type: "account_color",
+    key: "rose",
+    name: "Rose",
+    value: "#F43F5E",
+    price: STORE_PRICES.account_color,
+    durationDays: STORE_DURATION_DAYS,
+  },
+  {
+    itemId: "account_color_14",
+    type: "account_color",
+    key: "orange",
+    name: "Orange",
+    value: "#F97316",
+    price: STORE_PRICES.account_color,
+    durationDays: STORE_DURATION_DAYS,
+  },
+  {
+    itemId: "account_color_15",
+    type: "account_color",
+    key: "amber",
+    name: "Amber",
+    value: "#D97706",
+    price: STORE_PRICES.account_color,
+    durationDays: STORE_DURATION_DAYS,
+  },
+  {
+    itemId: "account_color_16",
+    type: "account_color",
+    key: "lime",
+    name: "Lime",
+    value: "#84CC16",
+    price: STORE_PRICES.account_color,
+    durationDays: STORE_DURATION_DAYS,
+  },
+  {
+    itemId: "account_color_17",
+    type: "account_color",
+    key: "emerald",
+    name: "Emerald",
+    value: "#10B981",
+    price: STORE_PRICES.account_color,
+    durationDays: STORE_DURATION_DAYS,
+  },
+  {
+    itemId: "account_color_18",
+    type: "account_color",
+    key: "turquoise",
+    name: "Turquoise",
+    value: "#2DD4BF",
+    price: STORE_PRICES.account_color,
+    durationDays: STORE_DURATION_DAYS,
+  },
+  {
+    itemId: "account_color_19",
+    type: "account_color",
+    key: "navy",
+    name: "Navy",
+    value: "#1E3A8A",
+    price: STORE_PRICES.account_color,
+    durationDays: STORE_DURATION_DAYS,
+  },
+  {
+    itemId: "account_color_20",
+    type: "account_color",
+    key: "royal_blue",
+    name: "Royal Blue",
+    value: "#1D4ED8",
+    price: STORE_PRICES.account_color,
+    durationDays: STORE_DURATION_DAYS,
+  },
+  {
+    itemId: "account_color_21",
+    type: "account_color",
+    key: "dark_blue",
+    name: "Dark Blue",
+    value: "#1E40AF",
+    price: STORE_PRICES.account_color,
+    durationDays: STORE_DURATION_DAYS,
+  },
+  {
+    itemId: "account_color_22",
+    type: "account_color",
+    key: "lavender",
+    name: "Lavender",
+    value: "#A78BFA",
+    price: STORE_PRICES.account_color,
+    durationDays: STORE_DURATION_DAYS,
+  },
+  {
+    itemId: "account_color_23",
+    type: "account_color",
+    key: "plum",
+    name: "Plum",
+    value: "#9333EA",
+    price: STORE_PRICES.account_color,
+    durationDays: STORE_DURATION_DAYS,
+  },
+  {
+    itemId: "account_color_24",
+    type: "account_color",
+    key: "magenta",
+    name: "Magenta",
+    value: "#DB2777",
+    price: STORE_PRICES.account_color,
+    durationDays: STORE_DURATION_DAYS,
+  },
+  {
+    itemId: "account_color_25",
+    type: "account_color",
+    key: "coral",
+    name: "Coral",
+    value: "#FB7185",
+    price: STORE_PRICES.account_color,
+    durationDays: STORE_DURATION_DAYS,
+  },
+  {
+    itemId: "account_color_26",
+    type: "account_color",
+    key: "salmon",
+    name: "Salmon",
+    value: "#F87171",
+    price: STORE_PRICES.account_color,
+    durationDays: STORE_DURATION_DAYS,
+  },
+  {
+    itemId: "account_color_27",
+    type: "account_color",
+    key: "brick",
+    name: "Brick",
+    value: "#B91C1C",
+    price: STORE_PRICES.account_color,
+    durationDays: STORE_DURATION_DAYS,
+  },
+  {
+    itemId: "account_color_28",
+    type: "account_color",
+    key: "brown",
+    name: "Brown",
+    value: "#92400E",
+    price: STORE_PRICES.account_color,
+    durationDays: STORE_DURATION_DAYS,
+  },
+  {
+    itemId: "account_color_29",
+    type: "account_color",
+    key: "chocolate",
+    name: "Chocolate",
+    value: "#78350F",
+    price: STORE_PRICES.account_color,
+    durationDays: STORE_DURATION_DAYS,
+  },
+  {
+    itemId: "account_color_30",
+    type: "account_color",
+    key: "sand",
+    name: "Sand",
+    value: "#D6A85F",
+    price: STORE_PRICES.account_color,
+    durationDays: STORE_DURATION_DAYS,
+  },
+  {
+    itemId: "account_color_31",
+    type: "account_color",
+    key: "yellow",
+    name: "Yellow",
+    value: "#EAB308",
+    price: STORE_PRICES.account_color,
+    durationDays: STORE_DURATION_DAYS,
+  },
+  {
+    itemId: "account_color_32",
+    type: "account_color",
+    key: "mustard",
+    name: "Mustard",
+    value: "#CA8A04",
+    price: STORE_PRICES.account_color,
+    durationDays: STORE_DURATION_DAYS,
+  },
+  {
+    itemId: "account_color_33",
+    type: "account_color",
+    key: "olive",
+    name: "Olive",
+    value: "#718327",
+    price: STORE_PRICES.account_color,
+    durationDays: STORE_DURATION_DAYS,
+  },
+  {
+    itemId: "account_color_34",
+    type: "account_color",
+    key: "forest",
+    name: "Forest",
+    value: "#166534",
+    price: STORE_PRICES.account_color,
+    durationDays: STORE_DURATION_DAYS,
+  },
+  {
+    itemId: "account_color_35",
+    type: "account_color",
+    key: "mint",
+    name: "Mint",
+    value: "#34D399",
+    price: STORE_PRICES.account_color,
+    durationDays: STORE_DURATION_DAYS,
+  },
+  {
+    itemId: "account_color_36",
+    type: "account_color",
+    key: "aqua",
+    name: "Aqua",
+    value: "#22D3EE",
+    price: STORE_PRICES.account_color,
+    durationDays: STORE_DURATION_DAYS,
+  },
+  {
+    itemId: "account_color_37",
+    type: "account_color",
+    key: "steel",
+    name: "Steel",
+    value: "#64748B",
+    price: STORE_PRICES.account_color,
+    durationDays: STORE_DURATION_DAYS,
+  },
+  {
+    itemId: "account_color_38",
+    type: "account_color",
+    key: "slate",
+    name: "Slate",
+    value: "#475569",
+    price: STORE_PRICES.account_color,
+    durationDays: STORE_DURATION_DAYS,
+  },
+  {
+    itemId: "account_color_39",
+    type: "account_color",
+    key: "gray",
+    name: "Gray",
+    value: "#6B7280",
+    price: STORE_PRICES.account_color,
+    durationDays: STORE_DURATION_DAYS,
+  },
+  {
+    itemId: "account_color_40",
+    type: "account_color",
+    key: "charcoal",
+    name: "Charcoal",
+    value: "#374151",
+    price: STORE_PRICES.account_color,
+    durationDays: STORE_DURATION_DAYS,
+  },
+  {
+    itemId: "account_color_41",
+    type: "account_color",
+    key: "black",
+    name: "Black",
+    value: "#111827",
+    price: STORE_PRICES.account_color,
+    durationDays: STORE_DURATION_DAYS,
+  },
+  {
+    itemId: "account_color_42",
+    type: "account_color",
+    key: "silver",
+    name: "Silver",
+    value: "#9CA3AF",
+    price: STORE_PRICES.account_color,
+    durationDays: STORE_DURATION_DAYS,
+  },
+  {
+    itemId: "account_color_43",
+    type: "account_color",
+    key: "light_gray",
+    name: "Light Gray",
+    value: "#D1D5DB",
+    price: STORE_PRICES.account_color,
+    durationDays: STORE_DURATION_DAYS,
+  },
+  {
+    itemId: "account_color_44",
+    type: "account_color",
+    key: "peach",
+    name: "Peach",
+    value: "#FDBA74",
+    price: STORE_PRICES.account_color,
+    durationDays: STORE_DURATION_DAYS,
+  },
+  {
+    itemId: "account_color_45",
+    type: "account_color",
+    key: "hot_pink",
+    name: "Hot Pink",
+    value: "#F472B6",
+    price: STORE_PRICES.account_color,
+    durationDays: STORE_DURATION_DAYS,
+  },
+  {
+    itemId: "account_color_46",
+    type: "account_color",
+    key: "wine",
+    name: "Wine",
+    value: "#881337",
+    price: STORE_PRICES.account_color,
+    durationDays: STORE_DURATION_DAYS,
+  },
+  {
+    itemId: "account_color_47",
+    type: "account_color",
+    key: "maroon",
+    name: "Maroon",
+    value: "#7F1D1D",
+    price: STORE_PRICES.account_color,
+    durationDays: STORE_DURATION_DAYS,
+  },
+  {
+    itemId: "account_color_48",
+    type: "account_color",
+    key: "deep_purple",
+    name: "Deep Purple",
+    value: "#581C87",
+    price: STORE_PRICES.account_color,
+    durationDays: STORE_DURATION_DAYS,
+  },
+  {
+    itemId: "account_color_49",
+    type: "account_color",
+    key: "deep_teal",
+    name: "Deep Teal",
+    value: "#115E59",
+    price: STORE_PRICES.account_color,
+    durationDays: STORE_DURATION_DAYS,
+  },
+  {
+    itemId: "account_color_50",
+    type: "account_color",
+    key: "deep_green",
+    name: "Deep Green",
+    value: "#14532D",
     price: STORE_PRICES.account_color,
     durationDays: STORE_DURATION_DAYS,
   },
@@ -142,7 +933,7 @@ export const STORE_ITEMS: StoreItem[] = [
     type: "image_badge",
     key: "eagle",
     name: "Eagle Badge",
-    value: "tps://te-bot.site/chatbackflutter/uploads/badges/eagle.png",
+    value: "https://te-bot.site/chatbackflutter/uploads/badges/eagle.png",
     price: STORE_PRICES.image_badge,
     durationDays: STORE_DURATION_DAYS,
   },
@@ -317,7 +1108,7 @@ export const STORE_ITEMS: StoreItem[] = [
     type: "lottie_badge",
     key: "eagle_fire",
     name: "Eagle Fire Lottie",
-    value: "tps://te-bot.site/chatbackflutter/uploads/badges/eagle-fire.json",
+    value: "https://te-bot.site/chatbackflutter/uploads/badges/eagle-fire.json",
     price: STORE_PRICES.lottie_badge,
     durationDays: STORE_DURATION_DAYS,
   },
@@ -326,7 +1117,7 @@ export const STORE_ITEMS: StoreItem[] = [
     type: "lottie_badge",
     key: "lion_gold",
     name: "Lion Gold Lottie",
-    value: "tps://te-bot.site/chatbackflutter/uploads/badges/lion-gold.json",
+    value: "https://te-bot.site/chatbackflutter/uploads/badges/lion-gold.json",
     price: STORE_PRICES.lottie_badge,
     durationDays: STORE_DURATION_DAYS,
   },

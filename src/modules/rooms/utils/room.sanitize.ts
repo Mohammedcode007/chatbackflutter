@@ -243,17 +243,33 @@ export function sanitizeRoomMedia(value: any) {
 export function sanitizeRoomReply(value: any) {
   if (!value || typeof value !== "object") return null;
 
-  const messageId = cleanText(value.messageId || value.message_id);
-  const fromUserId = cleanText(value.fromUserId || value.from_user_id);
+  const messageId = cleanText(
+    value.messageId || value.message_id
+  );
+
+  const fromUserId = cleanText(
+    value.fromUserId || value.from_user_id
+  );
+
+  const fromUsername = limitText(
+    value.fromUsername || value.from_username,
+    100
+  );
 
   if (!messageId || !fromUserId) return null;
 
   return {
     messageId,
     fromUserId,
+    fromUsername,
+
     text: sanitizeRoomMessageText(value.text),
-    type: cleanText(value.type),
-    mediaUrl: cleanText(value.mediaUrl || value.media_url),
+
+    type: limitText(value.type, 20),
+
+    mediaUrl: cleanText(
+      value.mediaUrl || value.media_url
+    ),
   };
 }
 

@@ -1,81 +1,377 @@
-import mongoose, { Schema, Document } from "mongoose";
+// import mongoose, { Schema, Document } from "mongoose";
 
-export type RoomMessageDocument = Document & {
+// export type RoomMessageDocument = Document & {
+//   messageId: string;
+//   roomId: string;
+
+//   fromUserId: string;
+//   fromUsername: string;
+//   fromPhotoUrl: string;
+
+//   fromBadgeValue: string;
+//   fromBadgeImageUrl: string;
+//   fromBadgeLottieUrl: string;
+
+//   messageKind: "user" | "join" | "leave" | "gift" | "system";
+//   type: "text" | "image" | "gif" | "none";
+
+//   text: string;
+
+//   media: {
+//     url: string;
+//     fileName: string;
+//     mimeType: string;
+//     sizeBytes: number;
+//   } | null;
+
+//   mention: {
+//     username: string;
+//     userId: string;
+//     text: string;
+//   } | null;
+
+//   gift: {
+//     key: string;
+//     name: string;
+//     animationUrl: string;
+//     value: number;
+//   } | null;
+
+//   replyTo: {
+//     messageId: string;
+//     fromUserId: string;
+//     text: string;
+//     type: string;
+//     mediaUrl: string;
+//   } | null;
+
+//   reactions: {
+//     userId: string;
+//     emoji: string;
+//     createdAt: Date;
+//   }[];
+
+//   isDeleted: boolean;
+
+//   createdAt: Date;
+//   updatedAt: Date;
+// };
+
+// const RoomMessageSchema = new Schema<RoomMessageDocument>(
+//   {
+//     messageId: {
+//       type: String,
+//       required: true,
+//       unique: true,
+//       index: true,
+//     },
+
+//     roomId: {
+//       type: String,
+//       required: true,
+//       index: true,
+//     },
+
+//     fromUserId: {
+//       type: String,
+//       required: true,
+//       index: true,
+//     },
+
+//     fromUsername: {
+//       type: String,
+//       default: "",
+//     },
+
+//     fromPhotoUrl: {
+//       type: String,
+//       default: "",
+//     },
+//     fromBadgeValue: {
+//       type: String,
+//       default: "",
+//     },
+
+//     fromBadgeImageUrl: {
+//       type: String,
+//       default: "",
+//     },
+
+//     fromBadgeLottieUrl: {
+//       type: String,
+//       default: "",
+//     },
+//     messageKind: {
+//       type: String,
+//       enum: ["user", "join", "leave", "gift", "system"],
+//       required: true,
+//       index: true,
+//     },
+
+//     type: {
+//       type: String,
+//       enum: ["text", "image", "gif", "none"],
+//       default: "text",
+//     },
+
+//     text: {
+//       type: String,
+//       default: "",
+//     },
+
+//     media: {
+//       type: {
+//         url: String,
+//         fileName: String,
+//         mimeType: String,
+//         sizeBytes: Number,
+//       },
+//       default: null,
+//     },
+
+//     mention: {
+//       type: {
+//         username: String,
+//         userId: String,
+//         text: String,
+//       },
+//       default: null,
+//     },
+
+//     gift: {
+//       type: {
+//         key: String,
+//         name: String,
+//         animationUrl: String,
+//         value: Number,
+//       },
+//       default: null,
+//     },
+
+//     replyTo: {
+//       type: {
+//         messageId: String,
+//         fromUserId: String,
+//         text: String,
+//         type: String,
+//         mediaUrl: String,
+//       },
+//       default: null,
+//     },
+
+//     reactions: {
+//       type: [
+//         {
+//           userId: String,
+//           emoji: String,
+//           createdAt: {
+//             type: Date,
+//             default: Date.now,
+//           },
+//         },
+//       ],
+//       default: [],
+//     },
+
+//     isDeleted: {
+//       type: Boolean,
+//       default: false,
+//     },
+//   },
+//   {
+//     timestamps: true,
+//   }
+// );
+
+// export const RoomMessageModel = mongoose.model<RoomMessageDocument>(
+//   "RoomMessage",
+//   RoomMessageSchema
+// );
+import mongoose, {
+  Schema,
+  Document,
+} from "mongoose";
+
+export type RoomMessageKind =
+  | "user"
+  | "join"
+  | "leave"
+  | "gift"
+  | "system";
+
+export type RoomMessageType =
+  | "text"
+  | "image"
+  | "gif"
+  | "none";
+
+export type RoomMessageReaction = {
+  userId: string;
+  username: string;
+  photoUrl: string;
+  emoji: string;
+  createdAt: Date;
+};
+
+export type RoomMessageReply = {
   messageId: string;
-  roomId: string;
 
   fromUserId: string;
   fromUsername: string;
   fromPhotoUrl: string;
 
-  fromBadgeValue: string;
-  fromBadgeImageUrl: string;
-  fromBadgeLottieUrl: string;
-
-  messageKind: "user" | "join" | "leave" | "gift" | "system";
-  type: "text" | "image" | "gif" | "none";
-
   text: string;
-
-  media: {
-    url: string;
-    fileName: string;
-    mimeType: string;
-    sizeBytes: number;
-  } | null;
-
-  mention: {
-    username: string;
-    userId: string;
-    text: string;
-  } | null;
-
-  gift: {
-    key: string;
-    name: string;
-    animationUrl: string;
-    value: number;
-  } | null;
-
-  replyTo: {
-    messageId: string;
-    fromUserId: string;
-    text: string;
-    type: string;
-    mediaUrl: string;
-  } | null;
-
-  reactions: {
-    userId: string;
-    emoji: string;
-    createdAt: Date;
-  }[];
-
-  isDeleted: boolean;
-
-  createdAt: Date;
-  updatedAt: Date;
+  type: RoomMessageType;
+  mediaUrl: string;
 };
 
-const RoomMessageSchema = new Schema<RoomMessageDocument>(
+export type RoomMessageDocument =
+  Document & {
+    messageId: string;
+    roomId: string;
+
+    fromUserId: string;
+    fromUsername: string;
+    fromPhotoUrl: string;
+
+    fromBadgeValue: string;
+    fromBadgeImageUrl: string;
+    fromBadgeLottieUrl: string;
+
+    messageKind: RoomMessageKind;
+    type: RoomMessageType;
+
+    text: string;
+
+    media: {
+      url: string;
+      fileName: string;
+      mimeType: string;
+      sizeBytes: number;
+    } | null;
+
+    mention: {
+      username: string;
+      userId: string;
+      text: string;
+    } | null;
+
+    gift: {
+      key: string;
+      name: string;
+      animationUrl: string;
+      value: number;
+    } | null;
+
+    replyTo: RoomMessageReply | null;
+
+    reactions: RoomMessageReaction[];
+
+    isDeleted: boolean;
+    deletedAt: Date | null;
+
+    createdAt: Date;
+    updatedAt: Date;
+  };
+
+const RoomMessageMediaSchema = new Schema(
+  {
+    url: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    fileName: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    mimeType: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    sizeBytes: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+  },
+  {
+    _id: false,
+  }
+);
+
+const RoomMessageMentionSchema = new Schema(
+  {
+    username: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    userId: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    text: {
+      type: String,
+      default: "",
+    },
+  },
+  {
+    _id: false,
+  }
+);
+
+const RoomMessageGiftSchema = new Schema(
+  {
+    key: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    name: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    animationUrl: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    value: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+  },
+  {
+    _id: false,
+  }
+);
+
+const RoomMessageReplySchema = new Schema(
   {
     messageId: {
       type: String,
       required: true,
-      unique: true,
-      index: true,
-    },
-
-    roomId: {
-      type: String,
-      required: true,
-      index: true,
+      trim: true,
     },
 
     fromUserId: {
       type: String,
-      required: true,
-      index: true,
+      default: "",
+      trim: true,
     },
 
     fromUsername: {
@@ -86,26 +382,12 @@ const RoomMessageSchema = new Schema<RoomMessageDocument>(
     fromPhotoUrl: {
       type: String,
       default: "",
-    },
-    fromBadgeValue: {
-      type: String,
-      default: "",
+      trim: true,
     },
 
-    fromBadgeImageUrl: {
+    text: {
       type: String,
       default: "",
-    },
-
-    fromBadgeLottieUrl: {
-      type: String,
-      default: "",
-    },
-    messageKind: {
-      type: String,
-      enum: ["user", "join", "leave", "gift", "system"],
-      required: true,
-      index: true,
     },
 
     type: {
@@ -114,76 +396,194 @@ const RoomMessageSchema = new Schema<RoomMessageDocument>(
       default: "text",
     },
 
-    text: {
+    mediaUrl: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+  },
+  {
+    _id: false,
+  }
+);
+
+const RoomMessageReactionSchema = new Schema(
+  {
+    userId: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    username: {
       type: String,
       default: "",
     },
 
-    media: {
-      type: {
-        url: String,
-        fileName: String,
-        mimeType: String,
-        sizeBytes: Number,
-      },
-      default: null,
+    photoUrl: {
+      type: String,
+      default: "",
+      trim: true,
     },
 
-    mention: {
-      type: {
-        username: String,
-        userId: String,
-        text: String,
-      },
-      default: null,
+    emoji: {
+      type: String,
+      required: true,
+      trim: true,
     },
 
-    gift: {
-      type: {
-        key: String,
-        name: String,
-        animationUrl: String,
-        value: Number,
-      },
-      default: null,
-    },
-
-    replyTo: {
-      type: {
-        messageId: String,
-        fromUserId: String,
-        text: String,
-        type: String,
-        mediaUrl: String,
-      },
-      default: null,
-    },
-
-    reactions: {
-      type: [
-        {
-          userId: String,
-          emoji: String,
-          createdAt: {
-            type: Date,
-            default: Date.now,
-          },
-        },
-      ],
-      default: [],
-    },
-
-    isDeleted: {
-      type: Boolean,
-      default: false,
+    createdAt: {
+      type: Date,
+      default: Date.now,
     },
   },
   {
-    timestamps: true,
+    _id: false,
   }
 );
 
-export const RoomMessageModel = mongoose.model<RoomMessageDocument>(
-  "RoomMessage",
-  RoomMessageSchema
-);
+const RoomMessageSchema =
+  new Schema<RoomMessageDocument>(
+    {
+      messageId: {
+        type: String,
+        required: true,
+        unique: true,
+        index: true,
+        trim: true,
+      },
+
+      roomId: {
+        type: String,
+        required: true,
+        index: true,
+        trim: true,
+      },
+
+      fromUserId: {
+        type: String,
+        required: true,
+        index: true,
+        trim: true,
+      },
+
+      fromUsername: {
+        type: String,
+        default: "",
+      },
+
+      fromPhotoUrl: {
+        type: String,
+        default: "",
+        trim: true,
+      },
+
+      fromBadgeValue: {
+        type: String,
+        default: "",
+      },
+
+      fromBadgeImageUrl: {
+        type: String,
+        default: "",
+        trim: true,
+      },
+
+      fromBadgeLottieUrl: {
+        type: String,
+        default: "",
+        trim: true,
+      },
+
+      messageKind: {
+        type: String,
+        enum: [
+          "user",
+          "join",
+          "leave",
+          "gift",
+          "system",
+        ],
+        required: true,
+        index: true,
+      },
+
+      type: {
+        type: String,
+        enum: [
+          "text",
+          "image",
+          "gif",
+          "none",
+        ],
+        default: "text",
+      },
+
+      text: {
+        type: String,
+        default: "",
+      },
+
+      media: {
+        type: RoomMessageMediaSchema,
+        default: null,
+      },
+
+      mention: {
+        type: RoomMessageMentionSchema,
+        default: null,
+      },
+
+      gift: {
+        type: RoomMessageGiftSchema,
+        default: null,
+      },
+
+      replyTo: {
+        type: RoomMessageReplySchema,
+        default: null,
+      },
+
+      reactions: {
+        type: [RoomMessageReactionSchema],
+        default: [],
+      },
+
+      isDeleted: {
+        type: Boolean,
+        default: false,
+        index: true,
+      },
+
+      deletedAt: {
+        type: Date,
+        default: null,
+      },
+    },
+    {
+      timestamps: true,
+      versionKey: false,
+    }
+  );
+
+RoomMessageSchema.index({
+  roomId: 1,
+  createdAt: -1,
+});
+
+RoomMessageSchema.index({
+  roomId: 1,
+  isDeleted: 1,
+  createdAt: -1,
+});
+
+RoomMessageSchema.index({
+  roomId: 1,
+  "reactions.userId": 1,
+});
+
+export const RoomMessageModel =
+  mongoose.model<RoomMessageDocument>(
+    "RoomMessage",
+    RoomMessageSchema
+  );

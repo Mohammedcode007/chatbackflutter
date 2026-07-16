@@ -31,7 +31,34 @@ import { UserModel } from "../../../models/User.model";
 const ROOM_MESSAGE_EVENT = "room.message";
 const ROOM_USERS_EVENT = "room.users";
 const ROOM_ACTIVE_COUNT_EVENT = "room.active_count.update";
+const ROOM_REACTION_EVENT = "room.message.reaction";
 
+type RoomReactionUser = {
+  userId: string;
+  username: string;
+  photoUrl: string;
+  createdAt: string;
+};
+
+type RoomGroupedReaction = {
+  emoji: string;
+  count: number;
+  users: RoomReactionUser[];
+};
+
+/*
+  roomId
+    -> messageId
+      -> emoji
+        -> userId -> user
+*/
+const roomMessageReactions = new Map<
+  string,
+  Map<
+    string,
+    Map<string, Map<string, RoomReactionUser>>
+  >
+>();
 function text(value: any) {
   return String(value || "").trim();
 }
@@ -1633,7 +1660,266 @@ if (
     logEnd(logName);
   }
 };
+const handleRoomMessageReaction: WsHandler = async (
+  context
+) => {
+  const logName = "ROOM_MESSAGE_REACTION_HANDLER";
 
+  try {
+    logStart(logName, context);
+
+    if (
+      !requireLogin(
+        context,
+        WS_EVENTS.ROOM_REACTION_EVENT
+      )
+    ) {
+      console.log(
+        `[${logName}] requireLogin failed`
+      );
+
+      logEnd(logName);
+      return;
+    }
+
+    const userId = text(context.client?.userId);
+    const username =
+      text(context.client?.username) || "User";
+
+    const photoUrl = text(
+      (context.client as any)?.photoUrl
+    );
+
+    const roomId = text(
+      context.message.roomId ||
+        context.message.room_id
+    );
+
+    const messageId = text(
+      context.message.messageId ||
+        context.message.message_id
+    );
+
+    const emoji = text(context.message.emoji);
+
+    if (!roomId) {
+      sendError(
+        context.socket,
+        WS_EVENTS.ROOM_REACTION_EVENT,
+        "room_id_required",
+        context.message.request_id
+      );
+
+      logEnd(logName);
+      return;
+    }
+
+    if (!messageId) {
+      sendError(
+        context.socket,
+        WS_EVENTS.ROOM_REACTION_EVENT,
+        "message_id_required",
+        context.message.request_id
+      );
+
+      logEnd(logName);
+      return;
+    }
+
+    if (!emoji) {
+      sendError(
+        context.socket,
+        WS_EVENTS.ROOM_REACTION_EVENT,
+        "emoji_required",
+        context.message.request_id
+      );
+
+      logEnd(logName);
+      return;
+    }
+
+    const userStillInRoom = isUserInRoom({
+      roomId,
+      userId,
+    });
+
+    if (!userStillInRoom) {
+      sendError(
+        context.socket,
+        WS_EVENTS.ROOM_REACTION_EVENT,
+        "room_not_joined",
+        context.message.request_id
+      );
+
+      logEnd(logName);
+      return;
+    }
+
+    let roomReactions =
+      roomMessageReactions.get(roomId);
+
+    if (!roomReactions) {
+      roomReactions = new Map();
+
+      roomMessageReactions.set(
+        roomId,
+        roomReactions
+      );
+    }
+
+    let messageReactions =
+      roomReactions.get(messageId);
+
+    if (!messageReactions) {
+      messageReactions = new Map();
+
+      roomReactions.set(
+        messageId,
+        messageReactions
+      );
+    }
+
+    let emojiUsers =
+      messageReactions.get(emoji);
+
+    if (!emojiUsers) {
+      emojiUsers = new Map();
+
+      messageReactions.set(
+        emoji,
+        emojiUsers
+      );
+    }
+
+    /*
+      الضغط على نفس الإيموجي مرة ثانية
+      يلغي الرياكشن.
+    */
+    const alreadyReacted =
+      emojiUsers.has(userId);
+
+    if (alreadyReacted) {
+      emojiUsers.delete(userId);
+    } else {
+      emojiUsers.set(userId, {
+        userId,
+        username,
+        photoUrl,
+        createdAt: new Date().toISOString(),
+      });
+    }
+
+    /*
+      حذف مجموعة الإيموجي إذا أصبحت فارغة.
+    */
+    if (emojiUsers.size === 0) {
+      messageReactions.delete(emoji);
+    }
+
+    /*
+      حذف الرسالة من الخريطة إذا لم يعد
+      عليها أي رياكشن.
+    */
+    if (messageReactions.size === 0) {
+      roomReactions.delete(messageId);
+    }
+
+    /*
+      تكوين القائمة المجمعة النهائية.
+    */
+    const reactions: RoomGroupedReaction[] =
+      [];
+
+    for (
+      const [
+        reactionEmoji,
+        usersMap,
+      ] of messageReactions.entries()
+    ) {
+      const users = Array.from(
+        usersMap.values()
+      );
+
+      reactions.push({
+        emoji: reactionEmoji,
+        count: users.length,
+        users,
+      });
+    }
+
+    const action = alreadyReacted
+      ? "remove"
+      : "add";
+
+    /*
+      تأكيد للمرسل.
+    */
+    sendSuccess(context.socket, {
+      handler:
+        WS_EVENTS.ROOM_REACTION_EVENT,
+
+      type: "success",
+
+      request_id:
+        context.message.request_id,
+
+      roomId,
+      messageId,
+      emoji,
+      action,
+      reactions,
+    });
+
+    /*
+      إرسال التحديث لكل مستخدمي الغرفة.
+    */
+    broadcastToRoomUsers(roomId, {
+      handler: ROOM_REACTION_EVENT,
+      type: "reaction",
+
+      roomId,
+      messageId,
+
+      emoji,
+      action,
+
+      user: {
+        userId,
+        username,
+        photoUrl,
+      },
+
+      reactions,
+    });
+
+    console.log(
+      `[${logName}] reaction updated:`,
+      {
+        roomId,
+        messageId,
+        emoji,
+        action,
+        reactionsCount: reactions.length,
+      }
+    );
+
+    logEnd(logName);
+  } catch (error) {
+    console.error(
+      `[${logName}] unexpected error:`,
+      error
+    );
+
+    sendError(
+      context.socket,
+      WS_EVENTS.ROOM_REACTION_EVENT,
+      "room_message_reaction_failed",
+      context.message.request_id
+    );
+
+    logEnd(logName);
+  }
+};
 const handleRoomFavoriteToggle: WsHandler = async (context) => {
   const logName = "ROOM_FAVORITE_TOGGLE_HANDLER";
 
@@ -2398,7 +2684,8 @@ export const roomHandlers = {
   [WS_HANDLERS.ROOM_FAVORITE_TOGGLE]: handleRoomFavoriteToggle,
   [WS_HANDLERS.ROOM_BOOST]: handleRoomBoost,
   [WS_HANDLERS.ROOM_ROLE_SET]: handleRoomRoleSet,
-
+[WS_HANDLERS.ROOM_MESSAGE_REACTION]:
+  handleRoomMessageReaction,
   [WS_HANDLERS.ROOM_KICK]: handleRoomKick,
   [WS_HANDLERS.ROOM_BAN]: handleRoomBan,
   [WS_HANDLERS.ROOM_SET_PASSWORD]: handleRoomPasswordSet,
