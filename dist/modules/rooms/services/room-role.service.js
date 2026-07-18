@@ -12,7 +12,7 @@ exports.getRoomRolesSnapshotService = getRoomRolesSnapshotService;
 const Room_model_1 = require("../models/Room.model");
 const room_ids_1 = require("../utils/room.ids");
 const room_sanitize_1 = require("../utils/room.sanitize");
-const User_model_1 = require("../../users/models/User.model");
+const User_model_1 = require("../../../models/User.model");
 /*
   تحديد رتبة المستخدم داخل الغرفة.
   مهم:
