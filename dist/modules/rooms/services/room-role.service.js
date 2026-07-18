@@ -12,6 +12,7 @@ exports.getRoomRolesSnapshotService = getRoomRolesSnapshotService;
 const Room_model_1 = require("../models/Room.model");
 const room_ids_1 = require("../utils/room.ids");
 const room_sanitize_1 = require("../utils/room.sanitize");
+const User_model_1 = require("../../users/models/User.model");
 /*
   تحديد رتبة المستخدم داخل الغرفة.
   مهم:
@@ -152,11 +153,17 @@ function canChangeTargetRole(input) {
     */
     if (actorRole === "creator")
         return true;
-    if (actorRole === "owner") {
-        if (targetRole === "owner")
-            return false;
-        return ["owner", "admin", "member", "none"].includes(newRole);
-    }
+  if (actorRole === "owner") {
+  /*
+    الأونر يستطيع تعديل أي مستخدم،
+    بما في ذلك أونر آخر.
+
+    الـ creator محمي مسبقًا في بداية الدالة.
+    كما أن المستخدم لا يستطيع تعديل نفسه
+    بسبب فحص actorId === targetUserId في السيرفس.
+  */
+  return ["owner", "admin", "member", "none"].includes(newRole);
+}
     if (actorRole === "admin") {
         if (targetRole === "owner" || targetRole === "admin") {
             return false;
@@ -214,15 +221,82 @@ function canModerateTarget(input) {
 */
 async function setRoomRoleService(input) {
     const actorId = (0, room_sanitize_1.sanitizeUserId)(input.actorId);
-    const targetUserId = (0, room_sanitize_1.sanitizeUserId)(input.targetUserId);
+
+    let targetUserId = (0, room_sanitize_1.sanitizeUserId)(
+        input.targetUserId
+    );
+
     const roomId = (0, room_sanitize_1.sanitizeRoomId)(input.roomId);
-    const actorUsername = (0, room_sanitize_1.cleanText)(input.actorUsername);
-    const targetUsername = (0, room_sanitize_1.cleanText)(input.targetUsername);
-    const newRole = input.newRole;
-    if (!actorId || !targetUserId || !roomId || !newRole) {
+
+    const actorUsername = (0, room_sanitize_1.cleanText)(
+        input.actorUsername
+    );
+
+    let targetUsername = (0, room_sanitize_1.cleanText)(
+        input.targetUsername
+    );
+
+    const newRole = String(input.newRole || "")
+        .trim()
+        .toLowerCase();
+
+    /*
+      يجب إرسال userId أو username على الأقل.
+    */
+    if (
+        !actorId ||
+        !roomId ||
+        !newRole ||
+        (!targetUserId && !targetUsername)
+    ) {
         return {
             ok: false,
             reason: "invalid_role_payload",
+        };
+    }
+
+    /*
+      إذا وصل اسم المستخدم فقط من Flutter،
+      نبحث عنه ونستخرج targetUserId.
+    */
+    if (!targetUserId && targetUsername) {
+        const escapedUsername = targetUsername.replace(
+            /[.*+?^${}()|[\]\\]/g,
+            "\\$&"
+        );
+
+        const targetUser = await User_model_1.UserModel.findOne({
+            username: {
+                $regex: `^${escapedUsername}$`,
+                $options: "i",
+            },
+        })
+            .select("userId username")
+            .lean();
+
+        if (!targetUser) {
+            return {
+                ok: false,
+                reason: "target_user_not_found",
+            };
+        }
+
+        targetUserId = (0, room_sanitize_1.sanitizeUserId)(
+            targetUser.userId
+        );
+
+        targetUsername = (0, room_sanitize_1.cleanText)(
+            targetUser.username
+        );
+    }
+
+    /*
+      تحقق نهائي بعد البحث.
+    */
+    if (!targetUserId) {
+        return {
+            ok: false,
+            reason: "target_user_id_required",
         };
     }
     if (actorId === targetUserId) {

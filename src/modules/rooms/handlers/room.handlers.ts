@@ -695,10 +695,9 @@ function makeRoomModerationMessage(input: {
 
   const isBan = input.action === "ban";
 
-  const textValue = isBan
-    ? `${actorUsername} حظر ${targetUsername}`
-    : `${actorUsername} طرد ${targetUsername}`;
-
+const textValue = isBan
+  ? `${actorUsername} banned ${targetUsername}`
+  : `${actorUsername} kicked ${targetUsername}`;
   return {
     messageId: `${input.action}_${input.actorId}_${input.targetUserId}_${now}`,
     roomId: input.roomId,
@@ -756,18 +755,30 @@ const handleRoomBan: WsHandler = async (context) => {
     const actorId = context.client!.userId!;
     const actorUsername = text(context.client?.username);
 
-    const roomId = text(context.message.roomId || context.message.room_id);
-
-    const targetUserId = text(
-      context.message.targetUserId || context.message.target_user_id
+    const roomId = text(
+      context.message.roomId ||
+      context.message.room_id
     );
 
-    const targetUsername = text(
-      context.message.targetUsername || context.message.target_username
+    const receivedTargetUserId = text(
+      context.message.targetUserId ||
+      context.message.target_user_id
     );
 
-    const targetIp = text(context.message.targetIp || context.message.target_ip);
-    const banIp = boolValue(context.message.banIp || context.message.ban_ip);
+    const receivedTargetUsername = text(
+      context.message.targetUsername ||
+      context.message.target_username
+    );
+
+    const targetIp = text(
+      context.message.targetIp ||
+      context.message.target_ip
+    );
+
+    const banIp = boolValue(
+      context.message.banIp ||
+      context.message.ban_ip
+    );
 
     if (!roomId) {
       sendError(
@@ -781,11 +792,19 @@ const handleRoomBan: WsHandler = async (context) => {
       return;
     }
 
-    if (!targetUserId) {
+    /*
+      نسمح بإرسال الـ ID أو اسم المستخدم.
+    */
+    const targetResult = await resolveTargetUser({
+      targetUserId: receivedTargetUserId,
+      targetUsername: receivedTargetUsername,
+    });
+
+    if (!targetResult.ok) {
       sendError(
         context.socket,
         WS_EVENTS.ROOM_UPDATE_EVENT,
-        "target_user_id_required",
+        targetResult.reason,
         context.message.request_id
       );
 
@@ -793,10 +812,31 @@ const handleRoomBan: WsHandler = async (context) => {
       return;
     }
 
-    const targetLiveUser = getRoomLiveUser(roomId, targetUserId);
+    const targetUserId = targetResult.userId;
+    const finalTargetUsername = targetResult.username;
 
-    const finalTargetUsername =
-      targetUsername || text((targetLiveUser as any)?.username) || targetUserId;
+    const targetLiveUser = getRoomLiveUser(
+      roomId,
+      targetUserId
+    );
+
+    /*
+      عند حظر IP، حاول قراءة IP من المستخدم الموجود داخل الغرفة
+      إذا لم يصل targetIp من الفرونت.
+    */
+    const finalTargetIp =
+      targetIp ||
+      text((targetLiveUser as any)?.ip) ||
+      text((targetLiveUser as any)?.clientIp);
+
+    console.log(`[${logName}] resolved target:`, {
+      receivedTargetUserId,
+      receivedTargetUsername,
+      targetUserId,
+      finalTargetUsername,
+      targetIp: finalTargetIp,
+      banIp,
+    });
 
     const result = await banUserFromRoomService({
       actorId,
@@ -804,7 +844,7 @@ const handleRoomBan: WsHandler = async (context) => {
       targetUserId,
       targetUsername: finalTargetUsername,
       roomId,
-      targetIp,
+      targetIp: finalTargetIp,
       banIp,
     });
 
@@ -821,6 +861,29 @@ const handleRoomBan: WsHandler = async (context) => {
       logEnd(logName);
       return;
     }
+    /*
+  عند حظر المستخدم:
+  نحذفه من جميع رتب الغرفة نهائيًا.
+*/
+await RoomModel.updateOne(
+  { roomId },
+  {
+    $pull: {
+      owners: targetUserId,
+      admins: targetUserId,
+      members: targetUserId,
+    },
+  }
+);
+
+/*
+  تحديث النسخة الموجودة في الذاكرة قبل إخراجه.
+*/
+updateRoomUserRole({
+  roomId,
+  userId: targetUserId,
+  role: "none",
+});
 
     forceUserLeaveLiveRoom({
       context,
@@ -982,7 +1045,23 @@ const handleRoomRoleSet: WsHandler = async (context) => {
       logEnd(logName);
       return;
     }
-
+/*
+  عند إعطاء رتبة فعلية للمستخدم:
+  نفك حظره تلقائيًا من الغرفة.
+  لا ننفذ هذا عند إزالة الرتبة newRole = none.
+*/
+if (result.newRole !== "none") {
+  await RoomModel.updateOne(
+    { roomId },
+    {
+      $pull: {
+        bannedUsers: {
+          userId: targetUserId,
+        },
+      },
+    }
+  );
+}
     /*
       تحديث الرتبة داخل اللايف memory
       لو المستخدم موجود داخل الغرفة الآن.
@@ -2543,6 +2622,203 @@ const handleRoomBannedList: WsHandler = async (context) => {
     logEnd(logName);
   }
 };
+const handleRoomUnban: WsHandler = async (context) => {
+  const logName = "ROOM_UNBAN_HANDLER";
+
+  try {
+    logStart(logName, context);
+
+    if (!requireLogin(context, WS_EVENTS.ROOM_UPDATE_EVENT)) {
+      logEnd(logName);
+      return;
+    }
+
+    const actorId = context.client!.userId!;
+    const actorUsername = text(context.client?.username);
+
+    const roomId = text(
+      context.message.roomId ||
+      context.message.room_id
+    );
+
+    const rawTargetUserId = text(
+      context.message.targetUserId ||
+      context.message.target_user_id
+    );
+
+    const rawTargetUsername = text(
+      context.message.targetUsername ||
+      context.message.target_username
+    );
+
+    if (!roomId) {
+      sendError(
+        context.socket,
+        WS_EVENTS.ROOM_UPDATE_EVENT,
+        "room_id_required",
+        context.message.request_id
+      );
+
+      logEnd(logName);
+      return;
+    }
+
+    /*
+      يقبل ID أو اسم المستخدم.
+    */
+    const resolvedTarget = await resolveTargetUser({
+      targetUserId: rawTargetUserId,
+      targetUsername: rawTargetUsername,
+    });
+
+    if (!resolvedTarget.ok) {
+      sendError(
+        context.socket,
+        WS_EVENTS.ROOM_UPDATE_EVENT,
+        resolvedTarget.reason,
+        context.message.request_id
+      );
+
+      logEnd(logName);
+      return;
+    }
+
+    const targetUserId = resolvedTarget.userId;
+    const targetUsername = resolvedTarget.username;
+
+    const room: any = await RoomModel.findOne({ roomId });
+
+    if (!room) {
+      sendError(
+        context.socket,
+        WS_EVENTS.ROOM_UPDATE_EVENT,
+        "room_not_found",
+        context.message.request_id
+      );
+
+      logEnd(logName);
+      return;
+    }
+
+    /*
+      تحديد رتبة منفذ فك الحظر.
+      فك الحظر متاح للـ creator والـ owner.
+    */
+    const actorRole =
+      String(room.creatorId || "") === actorId
+        ? "creator"
+        : Array.isArray(room.owners) &&
+            room.owners.map(String).includes(actorId)
+          ? "owner"
+          : Array.isArray(room.admins) &&
+              room.admins.map(String).includes(actorId)
+            ? "admin"
+            : Array.isArray(room.members) &&
+                room.members.map(String).includes(actorId)
+              ? "member"
+              : "none";
+
+    if (actorRole !== "creator" && actorRole !== "owner") {
+      sendError(
+        context.socket,
+        WS_EVENTS.ROOM_UPDATE_EVENT,
+        "no_permission",
+        context.message.request_id
+      );
+
+      logEnd(logName);
+      return;
+    }
+
+    /*
+      العثور على سجل المستخدم قبل حذفه،
+      حتى نحذف عنوان IP المرتبط به عند توفره.
+    */
+    const bannedEntry = Array.isArray(room.bannedUsers)
+      ? room.bannedUsers.find((item: any) => {
+          return text(item?.userId) === targetUserId;
+        })
+      : null;
+
+    const bannedIp = text(
+      bannedEntry?.ip ||
+      bannedEntry?.targetIp ||
+      bannedEntry?.clientIp
+    );
+
+    /*
+      إزالة المستخدم من قائمة الحظر.
+    */
+  room.bannedUsers = Array.isArray(room.bannedUsers)
+  ? room.bannedUsers.filter((item: any) => {
+      const bannedUserId =
+        typeof item === "object"
+          ? text(item?.userId)
+          : text(item);
+
+      return bannedUserId !== targetUserId;
+    })
+  : [];
+
+    /*
+      إزالة IP الخاص به من قائمة الحظر إن كان محفوظًا.
+    */
+    if (bannedIp && Array.isArray(room.bannedIps)) {
+      room.bannedIps = room.bannedIps.filter((ip: any) => {
+        return text(ip) !== bannedIp;
+      });
+    }
+
+    await room.save();
+
+    console.log(`[${logName}] user unbanned:`, {
+      actorId,
+      actorUsername,
+      roomId,
+      targetUserId,
+      targetUsername,
+      bannedIp,
+    });
+
+    sendSuccess(context.socket, {
+      handler: WS_EVENTS.ROOM_UPDATE_EVENT,
+      type: "unban",
+      request_id: context.message.request_id,
+      roomId,
+      targetUserId,
+      targetUsername,
+      message: "user_unbanned",
+    });
+
+    /*
+      إرسال القائمة الجديدة مباشرة حتى تختفي من الشاشة.
+    */
+    sendSuccess(context.socket, {
+      handler: WS_EVENTS.ROOM_UPDATE_EVENT,
+      type: "banned_list",
+      roomId,
+      bannedUsers: Array.isArray(room.bannedUsers)
+        ? room.bannedUsers
+        : [],
+      bannedIps: Array.isArray(room.bannedIps)
+        ? room.bannedIps
+        : [],
+    });
+
+    logEnd(logName);
+  } catch (error) {
+    console.error(`[${logName}] unexpected error:`, error);
+
+    sendError(
+      context.socket,
+      WS_EVENTS.ROOM_UPDATE_EVENT,
+      "room_unban_failed",
+      context.message.request_id
+    );
+
+    logEnd(logName);
+  }
+};
 const handleRoomRoleRemove: WsHandler = async (context) => {
   const logName = "ROOM_ROLE_REMOVE_HANDLER";
 
@@ -2692,6 +2968,7 @@ export const roomHandlers = {
   [WS_HANDLERS.ROOM_LOCK_SET]: handleRoomLockSet,
   [WS_HANDLERS.ROOM_PIN_SET]: handleRoomPinSet,
   [WS_HANDLERS.ROOM_ROLES_LIST]: handleRoomRolesList,
+  [WS_HANDLERS.ROOM_UNBAN]: handleRoomUnban,
   [WS_HANDLERS.ROOM_ROLE_REMOVE]: handleRoomRoleRemove,
   [WS_HANDLERS.ROOM_LOGS_LIST]: handleRoomLogsList,
   [WS_HANDLERS.ROOM_BANNED_LIST]: handleRoomBannedList,

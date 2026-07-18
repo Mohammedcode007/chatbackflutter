@@ -473,8 +473,8 @@ function makeRoomModerationMessage(input) {
     const targetUsername = text(input.targetUsername) || "User";
     const isBan = input.action === "ban";
     const textValue = isBan
-        ? `${actorUsername} حظر ${targetUsername}`
-        : `${actorUsername} طرد ${targetUsername}`;
+  ? `${actorUsername} banned ${targetUsername}`
+  : `${actorUsername} kicked ${targetUsername}`;
     return {
         messageId: `${input.action}_${input.actorId}_${input.targetUserId}_${now}`,
         roomId: input.roomId,

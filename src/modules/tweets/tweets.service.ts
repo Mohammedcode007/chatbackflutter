@@ -64,7 +64,58 @@ type RawTweetMediaItem = {
   mimeType?: unknown;
   mime_type?: unknown;
 };
+type TweetActionPermissionResult =
+  | {
+      ok: true;
+      accountType: string;
+    }
+  | {
+      ok: false;
+      reason: string;
+    };
 
+async function checkTweetActionPermission(
+  userId: string
+): Promise<TweetActionPermissionResult> {
+  const cleanUserId = cleanId(userId);
+
+  if (!cleanUserId) {
+    return {
+      ok: false,
+      reason: "invalid_user_id",
+    };
+  }
+
+  const user = await UserModel.findOne({
+    userId: cleanUserId,
+  })
+    .select("userId accountType")
+    .lean();
+
+  if (!user) {
+    return {
+      ok: false,
+      reason: "user_not_found",
+    };
+  }
+
+  const accountType =
+    String(user.accountType || "none")
+      .trim()
+      .toLowerCase();
+
+  if (!accountType || accountType === "none") {
+    return {
+      ok: false,
+      reason: "tweet_account_type_required",
+    };
+  }
+
+  return {
+    ok: true,
+    accountType,
+  };
+}
 function isObject(
   value: unknown
 ): value is Record<string, unknown> {
@@ -443,6 +494,16 @@ export async function createTweetService(
     username,
     payload,
   } = input;
+
+  const permission =
+    await checkTweetActionPermission(userId);
+
+  if (!permission.ok) {
+    return {
+      ok: false as const,
+      reason: permission.reason,
+    };
+  }
 
   const text =
     cleanText(payload.text);
@@ -1406,6 +1467,17 @@ export async function toggleTweetLikeService(
     tweetId: string;
   }
 ) {
+    const permission =
+    await checkTweetActionPermission(
+      input.userId
+    );
+
+  if (!permission.ok) {
+    return {
+      ok: false as const,
+      reason: permission.reason,
+    };
+  }
   const tweetId =
     cleanId(input.tweetId);
 
@@ -1551,6 +1623,18 @@ export async function toggleTweetRetweetService(
     tweetId: string;
   }
 ) {
+    const permission =
+    await checkTweetActionPermission(
+      input.userId
+    );
+
+  if (!permission.ok) {
+    return {
+      ok: false as const,
+      reason: permission.reason,
+    };
+  }
+
   const tweetId =
     cleanId(input.tweetId);
 
@@ -1839,6 +1923,18 @@ export async function createTweetCommentService(
     text: string;
   }
 ) {
+    const permission =
+    await checkTweetActionPermission(
+      input.userId
+    );
+
+  if (!permission.ok) {
+    return {
+      ok: false as const,
+      reason: permission.reason,
+    };
+  }
+
   const tweetId =
     cleanId(input.tweetId);
 
@@ -2033,6 +2129,17 @@ export async function updateTweetCommentService(
     text: string;
   }
 ) {
+  const permission =
+  await checkTweetActionPermission(
+    input.userId
+  );
+
+if (!permission.ok) {
+  return {
+    ok: false as const,
+    reason: permission.reason,
+  };
+}
   const commentId =
     cleanId(input.commentId);
 
@@ -2161,6 +2268,17 @@ export async function deleteTweetCommentService(
     commentId: string;
   }
 ) {
+  const permission =
+  await checkTweetActionPermission(
+    input.userId
+  );
+
+if (!permission.ok) {
+  return {
+    ok: false as const,
+    reason: permission.reason,
+  };
+}
   const comment =
     await TweetCommentModel.findOne({
       commentId:

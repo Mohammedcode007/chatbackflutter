@@ -186,12 +186,17 @@ export function canChangeTargetRole(input: {
   */
   if (actorRole === "creator") return true;
 
-  if (actorRole === "owner") {
-    if (targetRole === "owner") return false;
+if (actorRole === "owner") {
+  /*
+    الأونر يستطيع تعديل أي مستخدم،
+    بما في ذلك أونر آخر.
 
-    return ["owner", "admin", "member", "none"].includes(newRole);
-  }
-
+    الـ creator محمي مسبقًا في بداية الدالة.
+    كما أن المستخدم لا يستطيع تعديل نفسه
+    بسبب فحص actorId === targetUserId في السيرفس.
+  */
+  return ["owner", "admin", "member", "none"].includes(newRole);
+}
   if (actorRole === "admin") {
     if (targetRole === "owner" || targetRole === "admin") {
       return false;

@@ -18,7 +18,7 @@ export const WS_HANDLERS = {
   USERS_DELETE_ACCOUNT: "users.account.delete",
   USERS_BLOCK: "users.block",
   USERS_UNBLOCK: "users.unblock",
-
+ROOM_UNBAN: "room.unban",
   DM_SEND: "dm.send",
   DM_TYPING: "dm.typing",
   DM_SEEN: "dm.seen",
