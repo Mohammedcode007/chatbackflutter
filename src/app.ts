@@ -3,6 +3,11 @@ import cors from "cors";
 import path from "path";
 import crypto from "crypto";
 import { UserModel } from "./models/User.model";
+import {
+  forgotPasswordService,
+  verifyOtpService,
+  resetPasswordService,
+} from "./modules/auth/auth.service";
 export function createApp() {
   const app = express();
 
@@ -139,6 +144,165 @@ export function createApp() {
       websocket: true,
     });
   });
+
+  const forgotPasswordHandler = async (
+    req: express.Request,
+    res: express.Response
+  ) => {
+    try {
+      const email = String(req.body?.email || "").trim().toLowerCase();
+
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return res.status(400).json({
+          success: false,
+          message: "invalid_email",
+        });
+      }
+
+      const result = await forgotPasswordService({
+        handler: "auth.forgot_password",
+        email,
+      });
+
+      if (!result.ok) {
+        return res.status(400).json({
+          success: false,
+          message: result.reason,
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: result.message,
+      });
+    } catch (error) {
+      console.error("[REST FORGOT_PASSWORD_ERROR]", error);
+      return res.status(500).json({
+        success: false,
+        message: "internal_server_error",
+      });
+    }
+  };
+
+  const verifyOtpHandler = async (
+    req: express.Request,
+    res: express.Response
+  ) => {
+    try {
+      const email = String(req.body?.email || "").trim().toLowerCase();
+      const otp = String(req.body?.otp || "").trim();
+
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return res.status(400).json({
+          success: false,
+          message: "invalid_email",
+        });
+      }
+
+      if (!otp || !/^\d{6}$/.test(otp)) {
+        return res.status(400).json({
+          success: false,
+          message: "invalid_otp",
+        });
+      }
+
+      const result = await verifyOtpService({
+        handler: "auth.verify_otp",
+        email,
+        otp,
+      });
+
+      if (!result.ok) {
+        return res.status(400).json({
+          success: false,
+          message: result.reason,
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: result.message,
+      });
+    } catch (error) {
+      console.error("[REST VERIFY_OTP_ERROR]", error);
+      return res.status(500).json({
+        success: false,
+        message: "internal_server_error",
+      });
+    }
+  };
+
+  const resetPasswordHandler = async (
+    req: express.Request,
+    res: express.Response
+  ) => {
+    try {
+      const email = String(req.body?.email || "").trim().toLowerCase();
+      const otp = String(req.body?.otp || "").trim();
+      const newPassword = String(req.body?.newPassword || "").trim();
+
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return res.status(400).json({
+          success: false,
+          message: "invalid_email",
+        });
+      }
+
+      if (!otp || !/^\d{6}$/.test(otp)) {
+        return res.status(400).json({
+          success: false,
+          message: "invalid_otp",
+        });
+      }
+
+      if (!newPassword || newPassword.length < 6) {
+        return res.status(400).json({
+          success: false,
+          message: "password_too_short",
+        });
+      }
+
+      const result = await resetPasswordService({
+        handler: "auth.reset_password",
+        email,
+        otp,
+        newPassword,
+      });
+
+      if (!result.ok) {
+        return res.status(400).json({
+          success: false,
+          message: result.reason,
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: result.message,
+      });
+    } catch (error) {
+      console.error("[REST RESET_PASSWORD_ERROR]", error);
+      return res.status(500).json({
+        success: false,
+        message: "internal_server_error",
+      });
+    }
+  };
+
+  app.post(
+    ["/api/auth/forgot-password", "/chatbackflutter/api/auth/forgot-password"],
+    forgotPasswordHandler
+  );
+
+  app.post(
+    ["/api/auth/verify-otp", "/chatbackflutter/api/auth/verify-otp"],
+    verifyOtpHandler
+  );
+
+  app.post(
+    ["/api/auth/reset-password", "/chatbackflutter/api/auth/reset-password"],
+    resetPasswordHandler
+  );
 
   return app;
 }

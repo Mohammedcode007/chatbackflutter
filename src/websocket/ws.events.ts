@@ -3,6 +3,9 @@ export const WS_HANDLERS = {
   AUTH_REGISTER: "auth.register",
   AUTH_LOGOUT: "auth.logout",
   AUTH_RESUME: "auth.resume",
+  AUTH_FORGOT_PASSWORD: "auth.forgot_password",
+  AUTH_VERIFY_OTP: "auth.verify_otp",
+  AUTH_RESET_PASSWORD: "auth.reset_password",
 
   STORE_ITEMS_LIST: "store.items.list",
   STORE_ITEM_BUY: "store.item.buy",
@@ -145,6 +148,9 @@ export const WS_EVENTS = {
   LOGIN_EVENT: "login_event",
   REGISTER_EVENT: "register_event",
   LOGOUT_EVENT: "logout_event",
+  FORGOT_PASSWORD_EVENT: "forgot_password_event",
+  VERIFY_OTP_EVENT: "verify_otp_event",
+  RESET_PASSWORD_EVENT: "reset_password_event",
 
   STORE_ITEMS_EVENT: "store_items_event",
   STORE_BUY_EVENT: "store_buy_event",

@@ -151,6 +151,8 @@ export type UserDocument = Document & {
   statusMessage: string;
 
   email: string;
+  resetPasswordOTP?: string;
+  resetPasswordExpires?: Date | null;
   birthdate: string;
   country: string;
   gender: Gender;
@@ -494,6 +496,18 @@ const UserSchema = new Schema<UserDocument>(
       default: "",
       trim: true,
       lowercase: true,
+    },
+
+    resetPasswordOTP: {
+      type: String,
+      default: null,
+      select: false,
+    },
+
+    resetPasswordExpires: {
+      type: Date,
+      default: null,
+      select: false,
     },
 
     birthdate: {

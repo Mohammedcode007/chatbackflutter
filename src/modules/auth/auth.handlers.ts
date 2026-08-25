@@ -26,6 +26,9 @@ import {
   isLoginPayload,
   isRegisterPayload,
   isResumePayload,
+  isForgotPasswordPayload,
+  isVerifyOtpPayload,
+  isResetPasswordPayload,
 } from "./auth.validators";
 
 import {
@@ -33,6 +36,9 @@ import {
   logoutService,
   registerService,
   resumeService,
+  forgotPasswordService,
+  verifyOtpService,
+  resetPasswordService,
 } from "./auth.service";
 
 import {
@@ -630,6 +636,171 @@ const handleLogout: WsHandler = async (
   );
 };
 
+/*
+  طلب إعادة تعيين كلمة المرور (إرسال OTP).
+*/
+const handleForgotPassword: WsHandler = async (
+  context
+) => {
+  const { socket, message } = context;
+
+  console.log("[AUTH FORGOT PASSWORD] Request:", {
+    requestId: message.request_id,
+    email: message.email,
+  });
+
+  if (!isForgotPasswordPayload(message)) {
+    console.log(
+      "[AUTH FORGOT PASSWORD] invalid_forgot_password_payload"
+    );
+
+    sendError(
+      socket,
+      WS_EVENTS.FORGOT_PASSWORD_EVENT,
+      "invalid_forgot_password_payload",
+      message.request_id
+    );
+
+    return;
+  }
+
+  const result = await forgotPasswordService(message);
+
+  if (!result.ok) {
+    console.log(
+      "[AUTH FORGOT PASSWORD] Failed:",
+      result.reason
+    );
+
+    sendError(
+      socket,
+      WS_EVENTS.FORGOT_PASSWORD_EVENT,
+      result.reason,
+      message.request_id
+    );
+
+    return;
+  }
+
+  sendSuccess(socket, {
+    handler: WS_EVENTS.FORGOT_PASSWORD_EVENT,
+    request_id: message.request_id,
+    message: result.message,
+  });
+
+  console.log("[AUTH FORGOT PASSWORD] Completed");
+};
+
+/*
+  التحقق من OTP.
+*/
+const handleVerifyOtp: WsHandler = async (
+  context
+) => {
+  const { socket, message } = context;
+
+  console.log("[AUTH VERIFY OTP] Request:", {
+    requestId: message.request_id,
+    email: message.email,
+  });
+
+  if (!isVerifyOtpPayload(message)) {
+    console.log(
+      "[AUTH VERIFY OTP] invalid_verify_otp_payload"
+    );
+
+    sendError(
+      socket,
+      WS_EVENTS.VERIFY_OTP_EVENT,
+      "invalid_verify_otp_payload",
+      message.request_id
+    );
+
+    return;
+  }
+
+  const result = await verifyOtpService(message);
+
+  if (!result.ok) {
+    console.log(
+      "[AUTH VERIFY OTP] Failed:",
+      result.reason
+    );
+
+    sendError(
+      socket,
+      WS_EVENTS.VERIFY_OTP_EVENT,
+      result.reason,
+      message.request_id
+    );
+
+    return;
+  }
+
+  sendSuccess(socket, {
+    handler: WS_EVENTS.VERIFY_OTP_EVENT,
+    request_id: message.request_id,
+    message: result.message,
+  });
+
+  console.log("[AUTH VERIFY OTP] Completed");
+};
+
+/*
+  إعادة تعيين كلمة المرور.
+*/
+const handleResetPassword: WsHandler = async (
+  context
+) => {
+  const { socket, message } = context;
+
+  console.log("[AUTH RESET PASSWORD] Request:", {
+    requestId: message.request_id,
+    email: message.email,
+  });
+
+  if (!isResetPasswordPayload(message)) {
+    console.log(
+      "[AUTH RESET PASSWORD] invalid_reset_password_payload"
+    );
+
+    sendError(
+      socket,
+      WS_EVENTS.RESET_PASSWORD_EVENT,
+      "invalid_reset_password_payload",
+      message.request_id
+    );
+
+    return;
+  }
+
+  const result = await resetPasswordService(message);
+
+  if (!result.ok) {
+    console.log(
+      "[AUTH RESET PASSWORD] Failed:",
+      result.reason
+    );
+
+    sendError(
+      socket,
+      WS_EVENTS.RESET_PASSWORD_EVENT,
+      result.reason,
+      message.request_id
+    );
+
+    return;
+  }
+
+  sendSuccess(socket, {
+    handler: WS_EVENTS.RESET_PASSWORD_EVENT,
+    request_id: message.request_id,
+    message: result.message,
+  });
+
+  console.log("[AUTH RESET PASSWORD] Completed");
+};
+
 export const authHandlers = {
   /*
     Register
@@ -666,4 +837,31 @@ export const authHandlers = {
 
   logout:
     handleLogout,
+
+  /*
+    Forgot Password
+  */
+  [WS_HANDLERS.AUTH_FORGOT_PASSWORD]:
+    handleForgotPassword,
+
+  forgot_password:
+    handleForgotPassword,
+
+  /*
+    Verify OTP
+  */
+  [WS_HANDLERS.AUTH_VERIFY_OTP]:
+    handleVerifyOtp,
+
+  verify_otp:
+    handleVerifyOtp,
+
+  /*
+    Reset Password
+  */
+  [WS_HANDLERS.AUTH_RESET_PASSWORD]:
+    handleResetPassword,
+
+  reset_password:
+    handleResetPassword,
 };

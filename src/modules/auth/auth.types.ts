@@ -78,3 +78,30 @@ export type LogoutPayload = {
 
   request_id?: string;
 };
+
+export type ForgotPasswordPayload = {
+  handler: "auth.forgot_password" | "forgot_password";
+
+  request_id?: string;
+
+  email: string;
+};
+
+export type VerifyOtpPayload = {
+  handler: "auth.verify_otp" | "verify_otp";
+
+  request_id?: string;
+
+  email: string;
+  otp: string;
+};
+
+export type ResetPasswordPayload = {
+  handler: "auth.reset_password" | "reset_password";
+
+  request_id?: string;
+
+  email: string;
+  otp: string;
+  newPassword: string;
+};
