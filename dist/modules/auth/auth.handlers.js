@@ -326,6 +326,87 @@ const handleLogout = async (context) => {
         userId,
     });
 };
+/*
+  طلب إعادة تعيين كلمة المرور (إرسال OTP).
+*/
+const handleForgotPassword = async (context) => {
+    const { socket, message } = context;
+    console.log("[AUTH FORGOT PASSWORD] Request:", {
+        requestId: message.request_id,
+        email: message.email,
+    });
+    if (!(0, auth_validators_1.isForgotPasswordPayload)(message)) {
+        console.log("[AUTH FORGOT PASSWORD] invalid_forgot_password_payload");
+        (0, ws_utils_1.sendError)(socket, ws_events_1.WS_EVENTS.FORGOT_PASSWORD_EVENT, "invalid_forgot_password_payload", message.request_id);
+        return;
+    }
+    const result = await (0, auth_service_1.forgotPasswordService)(message);
+    if (!result.ok) {
+        console.log("[AUTH FORGOT PASSWORD] Failed:", result.reason);
+        (0, ws_utils_1.sendError)(socket, ws_events_1.WS_EVENTS.FORGOT_PASSWORD_EVENT, result.reason, message.request_id);
+        return;
+    }
+    (0, ws_utils_1.sendSuccess)(socket, {
+        handler: ws_events_1.WS_EVENTS.FORGOT_PASSWORD_EVENT,
+        request_id: message.request_id,
+        message: result.message,
+    });
+    console.log("[AUTH FORGOT PASSWORD] Completed");
+};
+/*
+  التحقق من OTP.
+*/
+const handleVerifyOtp = async (context) => {
+    const { socket, message } = context;
+    console.log("[AUTH VERIFY OTP] Request:", {
+        requestId: message.request_id,
+        email: message.email,
+    });
+    if (!(0, auth_validators_1.isVerifyOtpPayload)(message)) {
+        console.log("[AUTH VERIFY OTP] invalid_verify_otp_payload");
+        (0, ws_utils_1.sendError)(socket, ws_events_1.WS_EVENTS.VERIFY_OTP_EVENT, "invalid_verify_otp_payload", message.request_id);
+        return;
+    }
+    const result = await (0, auth_service_1.verifyOtpService)(message);
+    if (!result.ok) {
+        console.log("[AUTH VERIFY OTP] Failed:", result.reason);
+        (0, ws_utils_1.sendError)(socket, ws_events_1.WS_EVENTS.VERIFY_OTP_EVENT, result.reason, message.request_id);
+        return;
+    }
+    (0, ws_utils_1.sendSuccess)(socket, {
+        handler: ws_events_1.WS_EVENTS.VERIFY_OTP_EVENT,
+        request_id: message.request_id,
+        message: result.message,
+    });
+    console.log("[AUTH VERIFY OTP] Completed");
+};
+/*
+  إعادة تعيين كلمة المرور.
+*/
+const handleResetPassword = async (context) => {
+    const { socket, message } = context;
+    console.log("[AUTH RESET PASSWORD] Request:", {
+        requestId: message.request_id,
+        email: message.email,
+    });
+    if (!(0, auth_validators_1.isResetPasswordPayload)(message)) {
+        console.log("[AUTH RESET PASSWORD] invalid_reset_password_payload");
+        (0, ws_utils_1.sendError)(socket, ws_events_1.WS_EVENTS.RESET_PASSWORD_EVENT, "invalid_reset_password_payload", message.request_id);
+        return;
+    }
+    const result = await (0, auth_service_1.resetPasswordService)(message);
+    if (!result.ok) {
+        console.log("[AUTH RESET PASSWORD] Failed:", result.reason);
+        (0, ws_utils_1.sendError)(socket, ws_events_1.WS_EVENTS.RESET_PASSWORD_EVENT, result.reason, message.request_id);
+        return;
+    }
+    (0, ws_utils_1.sendSuccess)(socket, {
+        handler: ws_events_1.WS_EVENTS.RESET_PASSWORD_EVENT,
+        request_id: message.request_id,
+        message: result.message,
+    });
+    console.log("[AUTH RESET PASSWORD] Completed");
+};
 exports.authHandlers = {
     /*
       Register
@@ -347,5 +428,20 @@ exports.authHandlers = {
     */
     [ws_events_1.WS_HANDLERS.AUTH_LOGOUT]: handleLogout,
     logout: handleLogout,
+    /*
+      Forgot Password
+    */
+    [ws_events_1.WS_HANDLERS.AUTH_FORGOT_PASSWORD]: handleForgotPassword,
+    forgot_password: handleForgotPassword,
+    /*
+      Verify OTP
+    */
+    [ws_events_1.WS_HANDLERS.AUTH_VERIFY_OTP]: handleVerifyOtp,
+    verify_otp: handleVerifyOtp,
+    /*
+      Reset Password
+    */
+    [ws_events_1.WS_HANDLERS.AUTH_RESET_PASSWORD]: handleResetPassword,
+    reset_password: handleResetPassword,
 };
 //# sourceMappingURL=auth.handlers.js.map

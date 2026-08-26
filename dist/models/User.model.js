@@ -122,6 +122,57 @@ const UserSchema = new mongoose_1.Schema({
         type: String,
         required: true,
     },
+    platformRole: {
+        type: String,
+        enum: ["user", "admin", "owner"],
+        default: "user",
+        index: true,
+    },
+    accountType: {
+        type: String,
+        enum: [
+            "none",
+            "merchant",
+            "dealer",
+            "agent",
+            "partner",
+            "creator",
+            "broadcaster",
+            "vip",
+            "business",
+            "official",
+            "sponsor",
+            "tester",
+        ],
+        default: "none",
+        index: true,
+    },
+    roomEntryMediaUrl: {
+        type: String,
+        default: "",
+        trim: true,
+        maxlength: 2048,
+    },
+    profileEntryMediaUrl: {
+        type: String,
+        default: "",
+        trim: true,
+        maxlength: 2048,
+    },
+    roomWelcomeMessage: {
+        type: String,
+        default: "",
+        trim: true,
+        maxlength: 160,
+    },
+    roomEntryEnabled: {
+        type: Boolean,
+        default: false,
+    },
+    profileEntryEnabled: {
+        type: Boolean,
+        default: false,
+    },
     sessionTokenHash: {
         type: String,
         default: "",
@@ -250,6 +301,16 @@ const UserSchema = new mongoose_1.Schema({
         trim: true,
         lowercase: true,
     },
+    resetPasswordOTP: {
+        type: String,
+        default: null,
+        select: false,
+    },
+    resetPasswordExpires: {
+        type: Date,
+        default: null,
+        select: false,
+    },
     birthdate: {
         type: String,
         default: "",
@@ -330,6 +391,14 @@ const UserSchema = new mongoose_1.Schema({
     },
 }, {
     timestamps: true,
+});
+UserSchema.index({
+    platformRole: 1,
+    accountType: 1,
+});
+UserSchema.index({
+    username: 1,
+    platformRole: 1,
 });
 exports.UserModel = mongoose_1.default.model("User", UserSchema);
 //# sourceMappingURL=User.model.js.map

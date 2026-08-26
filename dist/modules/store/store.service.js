@@ -1,270 +1,9 @@
 "use strict";
-// import { UserModel } from "../../models/User.model";
-// import { findStoreItem, STORE_ITEMS, StoreItemType } from "./store.items";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.listStoreItemsService = listStoreItemsService;
 exports.buyStoreItemService = buyStoreItemService;
 exports.activateStoreItemService = activateStoreItemService;
 exports.addUserPointsService = addUserPointsService;
-// function sanitizeUser(user: any) {
-//   const obj = user.toObject ? user.toObject() : user;
-//   const { password, __v, ...safeUser } = obj;
-//   return {
-//     ...safeUser,
-//     _id: String(obj._id),
-//     mongoId: String(obj._id),
-//   };
-// }
-// function addDays(days: number) {
-//   const date = new Date();
-//   date.setDate(date.getDate() + days);
-//   return date;
-// }
-// function isExpired(expiresAt?: Date | string | null) {
-//   if (!expiresAt) return false;
-//   return new Date(expiresAt).getTime() <= Date.now();
-// }
-// function resetActiveByType(user: any, type: StoreItemType) {
-//   if (type === "account_color") {
-//     user.accountColor = "#2BCB00";
-//   }
-//   if (type === "badge") {
-//     user.badgeKey = "";
-//     user.badgeName = "";
-//     user.badgeValue = "";
-//     if (user.features) {
-//       user.features.badge = null;
-//     }
-//   }
-//   if (type === "image_badge") {
-//     user.badgeImageKey = "";
-//     user.badgeImageName = "";
-//     user.badgeImageUrl = "";
-//   }
-//   if (type === "lottie_badge") {
-//     user.badgeLottieKey = "";
-//     user.badgeLottieName = "";
-//     user.badgeLottieUrl = "";
-//   }
-//   if (type === "verification") {
-//     user.verificationType = "none";
-//   }
-// }
-// function applyItemToUser(user: any, item: any) {
-//   if (item.type === "account_color") {
-//     user.accountColor = item.value;
-//   }
-//   if (item.type === "badge") {
-//     user.badgeKey = item.key;
-//     user.badgeName = item.name;
-//     user.badgeValue = item.value;
-//     if (user.features) {
-//       user.features.badge = item.value;
-//     }
-//   }
-//   if (item.type === "image_badge") {
-//     user.badgeImageKey = item.key;
-//     user.badgeImageName = item.name;
-//     user.badgeImageUrl = item.value;
-//   }
-//   if (item.type === "lottie_badge") {
-//     user.badgeLottieKey = item.key;
-//     user.badgeLottieName = item.name;
-//     user.badgeLottieUrl = item.value;
-//   }
-//   if (item.type === "verification") {
-//     user.verificationType = item.value;
-//   }
-// }
-// function removeExpiredItemsAndFixActive(user: any) {
-//   const inventory = user.inventory || [];
-//   const validInventory = inventory.filter((item: any) => {
-//     return !isExpired(item.expiresAt);
-//   });
-//   const removedTypes = new Set<string>();
-//   for (const item of inventory) {
-//     if (isExpired(item.expiresAt)) {
-//       removedTypes.add(item.type);
-//     }
-//   }
-//   user.inventory = validInventory;
-//   for (const type of removedTypes) {
-//     const stillActive = validInventory.find(
-//       (item: any) => item.type === type && item.isActive === true
-//     );
-//     if (!stillActive) {
-//       resetActiveByType(user, type as StoreItemType);
-//     }
-//   }
-// }
-// export async function listStoreItemsService(userId: string) {
-//   const user = await UserModel.findOne({ userId });
-//   if (!user) {
-//     return {
-//       ok: false as const,
-//       reason: "user_not_found",
-//     };
-//   }
-//   removeExpiredItemsAndFixActive(user);
-//   await user.save();
-//   return {
-//     ok: true as const,
-//     points: user.points,
-//     items: STORE_ITEMS,
-//     inventory: user.inventory || [],
-//     user: sanitizeUser(user),
-//   };
-// }
-// export async function buyStoreItemService(input: {
-//   userId: string;
-//   itemId: string;
-// }) {
-//   const { userId, itemId } = input;
-//   const item = findStoreItem(itemId);
-//   if (!item) {
-//     return {
-//       ok: false as const,
-//       reason: "item_not_found",
-//     };
-//   }
-//   const user = await UserModel.findOne({ userId });
-//   if (!user) {
-//     return {
-//       ok: false as const,
-//       reason: "user_not_found",
-//     };
-//   }
-//   removeExpiredItemsAndFixActive(user);
-//   if (user.points < item.price) {
-//     return {
-//       ok: false as const,
-//       reason: "not_enough_points",
-//     };
-//   }
-//   /*
-//     مهم:
-//     عند شراء عنصر من نفس النوع:
-//     - نحذف القديم من نفس النوع
-//     - نضيف الجديد
-//     - نفعله مباشرة
-//     - يبدأ 30 يوم من وقت الشراء الجديد
-//     - نخصم النقاط
-//   */
-//   user.inventory = (user.inventory || []).filter(
-//     (owned: any) => owned.type !== item.type
-//   );
-//   resetActiveByType(user, item.type);
-//   const expiresAt = addDays(item.durationDays);
-//   user.points -= item.price;
-//   const newInventoryItem = {
-//     itemId: item.itemId,
-//     type: item.type,
-//     key: item.key,
-//     name: item.name,
-//     value: item.value,
-//     purchasedAt: new Date(),
-//     expiresAt,
-//     isActive: true,
-//   };
-//   user.inventory.push(newInventoryItem);
-//   applyItemToUser(user, item);
-//   await user.save();
-//   return {
-//     ok: true as const,
-//     points: user.points,
-//     item,
-//     activeItem: newInventoryItem,
-//     inventory: user.inventory,
-//     user: sanitizeUser(user),
-//   };
-// }
-// export async function activateStoreItemService(input: {
-//   userId: string;
-//   itemId: string;
-// }) {
-//   const { userId, itemId } = input;
-//   const user = await UserModel.findOne({ userId });
-//   if (!user) {
-//     return {
-//       ok: false as const,
-//       reason: "user_not_found",
-//     };
-//   }
-//   removeExpiredItemsAndFixActive(user);
-//   const owned = (user.inventory || []).find(
-//     (item: any) => item.itemId === itemId
-//   );
-//   if (!owned) {
-//     await user.save();
-//     return {
-//       ok: false as const,
-//       reason: "item_not_owned",
-//     };
-//   }
-//   if (isExpired(owned.expiresAt)) {
-//     user.inventory = (user.inventory || []).filter(
-//       (item: any) => item.itemId !== itemId
-//     );
-//     resetActiveByType(user, owned.type);
-//     await user.save();
-//     return {
-//       ok: false as const,
-//       reason: "item_expired",
-//     };
-//   }
-//   for (const item of user.inventory) {
-//     if (item.type === owned.type) {
-//       item.isActive = false;
-//     }
-//   }
-//   owned.isActive = true;
-//   applyItemToUser(user, owned);
-//   await user.save();
-//   return {
-//     ok: true as const,
-//     item: owned,
-//     inventory: user.inventory,
-//     user: sanitizeUser(user),
-//   };
-// }
-// /*
-//   للتجربة فقط.
-//   بعد الدفع الحقيقي اجعل إضافة النقاط من admin أو webhook الدفع فقط.
-// */
-// export async function addUserPointsService(input: {
-//   userId: string;
-//   amount: number;
-// }) {
-//   const { userId, amount } = input;
-//   if (!Number.isFinite(amount) || amount <= 0) {
-//     return {
-//       ok: false as const,
-//       reason: "invalid_points_amount",
-//     };
-//   }
-//   const user = await UserModel.findOneAndUpdate(
-//     { userId },
-//     {
-//       $inc: {
-//         points: Math.floor(amount),
-//       },
-//     },
-//     {
-//       new: true,
-//     }
-//   );
-//   if (!user) {
-//     return {
-//       ok: false as const,
-//       reason: "user_not_found",
-//     };
-//   }
-//   return {
-//     ok: true as const,
-//     points: user.points,
-//     user: sanitizeUser(user),
-//   };
-// }
 const User_model_1 = require("../../models/User.model");
 const store_items_1 = require("./store.items");
 function sanitizeUser(user) {
@@ -305,6 +44,34 @@ function deactivateInventoryGroup(user, type) {
         }
     }
 }
+function disableAllBadges(user) {
+    user.inventory = user.inventory || [];
+    /*
+      تعطيل جميع أنواع البادجات داخل المخزون،
+      مع الاحتفاظ بها لاستخدامها لاحقًا.
+    */
+    for (const inventoryItem of user.inventory) {
+        const itemType = inventoryItem.type;
+        if ((0, store_items_1.isBadgeStoreItemType)(itemType)) {
+            inventoryItem.isActive = false;
+        }
+    }
+    /*
+      مسح جميع بيانات البادجات الظاهرة من المستخدم.
+    */
+    user.badgeKey = "";
+    user.badgeName = "";
+    user.badgeValue = "";
+    user.badgeImageKey = "";
+    user.badgeImageName = "";
+    user.badgeImageUrl = "";
+    user.badgeLottieKey = "";
+    user.badgeLottieName = "";
+    user.badgeLottieUrl = "";
+    if (user.features) {
+        user.features.badge = null;
+    }
+}
 /*
   يمسح القيم الظاهرة على اليوزر حسب المجموعة.
   لا يحذف أي شيء من inventory.
@@ -343,6 +110,16 @@ function resetActiveByType(user, type) {
   المخزون لا يتأثر هنا.
 */
 function applyItemToUser(user, item) {
+    /*
+      عنصر No Badge لا يتم تطبيقه كبادج عادي.
+      بل يمسح جميع البادجات الحالية.
+    */
+    if (item.itemId === "badge_none" ||
+        item.key === "none" ||
+        item.disableBadge === true) {
+        disableAllBadges(user);
+        return;
+    }
     const itemType = item.type;
     /*
       قبل تطبيق أي بادج، نمسح باقي أنواع البادجات من بيانات العرض.
@@ -495,6 +272,24 @@ async function buyStoreItemService(input) {
         };
     }
     removeExpiredItemsAndFixActive(user);
+    /*
+      خيار بدون بادج مجاني ولا يُضاف إلى inventory.
+      يتم فقط تعطيل جميع البادجات الحالية.
+    */
+    if (item.itemId === "badge_none" ||
+        item.key === "none" ||
+        item.disableBadge === true) {
+        disableAllBadges(user);
+        await user.save();
+        return {
+            ok: true,
+            points: user.points,
+            item,
+            activeItem: null,
+            inventory: user.inventory || [],
+            user: sanitizeUser(user),
+        };
+    }
     if (user.points < item.price) {
         return {
             ok: false,
@@ -573,6 +368,64 @@ async function activateStoreItemService(input) {
     }
     removeExpiredItemsAndFixActive(user);
     user.inventory = user.inventory || [];
+    /*
+      خيار بدون بادج:
+      - لا يحتاج أن يكون مملوكًا.
+      - لا تتم إضافته إلى inventory.
+      - لا يتم خصم نقاط.
+      - يعطل كل أنواع البادجات فقط.
+    */
+    if (itemId === "badge_none") {
+        disableAllBadges(user);
+        await user.save();
+        return {
+            ok: true,
+            item: {
+                itemId: "badge_none",
+                type: "badge",
+                key: "none",
+                name: "No Badge",
+                value: "",
+                price: 0,
+                durationDays: 0,
+                disableBadge: true,
+            },
+            activeItem: null,
+            inventory: user.inventory,
+            user: sanitizeUser(user),
+        };
+    }
+    if (itemId === "verification_none") {
+        /*
+          تعطيل جميع عناصر التوثيق الموجودة في المخزون
+          مع الاحتفاظ بها حتى يمكن تفعيلها لاحقًا.
+        */
+        for (const inventoryItem of user.inventory) {
+            if (inventoryItem.type === "verification") {
+                inventoryItem.isActive = false;
+            }
+        }
+        /*
+          إزالة التوثيق الظاهر من حساب المستخدم.
+        */
+        user.verificationType = "none";
+        await user.save();
+        return {
+            ok: true,
+            item: {
+                itemId: "verification_none",
+                type: "verification",
+                key: "none",
+                name: "No Verification",
+                value: "none",
+                price: 0,
+                durationDays: 0,
+            },
+            activeItem: null,
+            inventory: user.inventory,
+            user: sanitizeUser(user),
+        };
+    }
     const owned = user.inventory.find((item) => {
         return item.itemId === itemId;
     });
@@ -586,7 +439,6 @@ async function activateStoreItemService(input) {
     if (isExpired(owned.expiresAt)) {
         /*
           نحذف فقط العنصر المنتهي.
-          هذا حذف بسبب انتهاء المدة، وليس بسبب التبديل.
         */
         user.inventory = user.inventory.filter((item) => {
             return item.itemId !== itemId;
@@ -600,12 +452,11 @@ async function activateStoreItemService(input) {
     }
     const ownedType = owned.type;
     /*
-      التبديل بين عناصر المخزون:
-      نعطل نفس المجموعة فقط بدون حذف.
+      نعطل العناصر التابعة لنفس المجموعة فقط.
     */
     deactivateInventoryGroup(user, ownedType);
     /*
-      نمسح بيانات العرض الحالية من نفس المجموعة.
+      نمسح بيانات العرض الحالية للمجموعة.
     */
     resetActiveByType(user, ownedType);
     /*
@@ -618,6 +469,7 @@ async function activateStoreItemService(input) {
     return {
         ok: true,
         item: owned,
+        activeItem: owned,
         inventory: user.inventory,
         user: sanitizeUser(user),
     };

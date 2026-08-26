@@ -1,14 +1,4 @@
 "use strict";
-// import type { WsHandler } from "../../websocket/ws.types";
-// import { requireLogin } from "../../websocket/ws.auth";
-// import { sendError, sendSuccess } from "../../websocket/ws.utils";
-// import { WS_EVENTS, WS_HANDLERS } from "../../websocket/ws.events";
-// import {
-//   activateStoreItemService,
-//   addUserPointsService,
-//   buyStoreItemService,
-//   listStoreItemsService,
-// } from "./store.service";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.storeHandlers = void 0;
 const ws_auth_1 = require("../../websocket/ws.auth");
@@ -81,6 +71,7 @@ const handleActivateStoreItem = async (context) => {
         handler: ws_events_1.WS_EVENTS.STORE_ACTIVATE_EVENT,
         request_id: context.message.request_id,
         item: result.item,
+        activeItem: result.activeItem ?? null,
         inventory: result.inventory,
         user: result.user,
     });
