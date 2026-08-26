@@ -456,6 +456,14 @@ function cleanupSocket(socket: WebSocket) {
           activeUsers,
           activeCount,
         });
+
+        broadcastToRoom(roomId, {
+          handler: "room_event",
+          type: "user_dc",
+          userId: result.userId,
+          username,
+          message: `${username} غادر بسبب انقطاع الاتصال DC`,
+        });
       }
     }
   }
