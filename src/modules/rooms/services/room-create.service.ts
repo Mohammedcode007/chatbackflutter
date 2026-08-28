@@ -22,6 +22,8 @@ export async function createRoomService(input: {
   description?: string;
   password?: string;
   voiceEnabled?: boolean;
+  roomImage?: string;
+  countryCode?: string;
 }) {
   console.log("\n===== CREATE_ROOM_SERVICE_START =====");
   console.log("[createRoomService] raw input:", input);
@@ -32,6 +34,8 @@ export async function createRoomService(input: {
     const description = sanitizeRoomDescription(input.description);
     const password = sanitizeRoomPassword(input.password);
     const voiceEnabled = input.voiceEnabled === true;
+    const roomImage = String(input.roomImage || "").trim();
+    const countryCode = String(input.countryCode || "").trim();
 
     console.log("[createRoomService] sanitized values:", {
       creatorId,
@@ -40,6 +44,8 @@ export async function createRoomService(input: {
       hasPassword: password.length > 0,
       passwordLength: password.length,
       voiceEnabled,
+      hasRoomImage: roomImage.length > 0,
+      countryCode,
     });
 
     if (!creatorId) {
@@ -159,6 +165,9 @@ export async function createRoomService(input: {
       },
 
       voiceEnabled,
+
+      roomImage,
+      country: countryCode,
     };
 
     console.log("[createRoomService] creating room with payload:", {

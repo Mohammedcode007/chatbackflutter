@@ -337,6 +337,13 @@ import {
 
 import { UserModel } from "../../models/User.model";
 
+import {
+  createSessionRecord,
+  deleteSessionOnLogout,
+  generateSessionId,
+  lookupCountryCode,
+} from "./session.service";
+
 /*
   مدة صلاحية تسجيل الدخول: 30 يومًا.
 */
@@ -444,7 +451,8 @@ function getDuplicateReason(error: any) {
 }
 
 export async function registerService(
-  payload: RegisterPayload
+  payload: RegisterPayload,
+  ipInfo?: { ipAddress: string; countryCode: string; deviceInfo: string }
 ) {
   console.log("========== REGISTER START ==========");
 
@@ -592,6 +600,18 @@ export async function registerService(
     const session = await createSessionForUser(user);
     const safeUser = sanitizeUser(user);
 
+    const sessionId = generateSessionId();
+
+    if (ipInfo) {
+      await createSessionRecord({
+        userId: user.userId,
+        sessionId,
+        ipAddress: ipInfo.ipAddress,
+        countryCode: ipInfo.countryCode,
+        deviceInfo: ipInfo.deviceInfo,
+      });
+    }
+
     console.log(
       "[REGISTER] User created successfully:",
       {
@@ -608,6 +628,7 @@ export async function registerService(
       ok: true as const,
       user: safeUser,
       token: session.token,
+      sessionId,
       sessionExpiresAt:
         session.expiresAt.toISOString(),
     };
@@ -636,7 +657,8 @@ export async function registerService(
 }
 
 export async function loginService(
-  payload: LoginPayload
+  payload: LoginPayload,
+  ipInfo?: { ipAddress: string; countryCode: string; deviceInfo: string }
 ) {
   console.log("========== LOGIN START ==========");
 
@@ -728,6 +750,18 @@ export async function loginService(
   */
   const session = await createSessionForUser(user);
 
+  const sessionId = generateSessionId();
+
+  if (ipInfo) {
+    await createSessionRecord({
+      userId: user.userId,
+      sessionId,
+      ipAddress: ipInfo.ipAddress,
+      countryCode: ipInfo.countryCode,
+      deviceInfo: ipInfo.deviceInfo,
+    });
+  }
+
   const safeUser = sanitizeUser(user);
 
   console.log("[LOGIN] Login success:", {
@@ -742,6 +776,7 @@ export async function loginService(
     ok: true as const,
     user: safeUser,
     token: session.token,
+    sessionId,
     sessionExpiresAt:
       session.expiresAt.toISOString(),
   };
@@ -754,7 +789,8 @@ export async function loginService(
   نقارن hash الرمز مع الموجود في MongoDB.
 */
 export async function resumeService(
-  payload: ResumePayload
+  payload: ResumePayload,
+  ipInfo?: { ipAddress: string; countryCode: string; deviceInfo: string }
 ) {
   console.log("========== AUTH RESUME START ==========");
 
@@ -809,6 +845,18 @@ export async function resumeService(
   */
   const newSession = await createSessionForUser(user);
 
+  const sessionId = generateSessionId();
+
+  if (ipInfo) {
+    await createSessionRecord({
+      userId: user.userId,
+      sessionId,
+      ipAddress: ipInfo.ipAddress,
+      countryCode: ipInfo.countryCode,
+      deviceInfo: ipInfo.deviceInfo,
+    });
+  }
+
   const safeUser = sanitizeUser(user);
 
   console.log("[AUTH RESUME] Success:", {
@@ -825,6 +873,7 @@ export async function resumeService(
     ok: true as const,
     user: safeUser,
     token: newSession.token,
+    sessionId,
     sessionExpiresAt:
       newSession.expiresAt.toISOString(),
   };
@@ -832,10 +881,12 @@ export async function resumeService(
 
 export async function logoutService(input?: {
   userId?: string;
+  sessionId?: string;
 }) {
   console.log("[LOGOUT] logoutService called");
 
   const userId = input?.userId;
+  const sessionId = input?.sessionId;
 
   if (userId) {
     await UserModel.updateOne(
@@ -857,6 +908,10 @@ export async function logoutService(input?: {
         },
       }
     );
+  }
+
+  if (sessionId) {
+    await deleteSessionOnLogout(userId || "", sessionId);
   }
 
   return {

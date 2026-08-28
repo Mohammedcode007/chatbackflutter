@@ -10,6 +10,12 @@ const dmActiveChats_store_1 = require("../../websocket/stores/dmActiveChats.stor
 function textValue(value) {
     return String(value || "").trim();
 }
+function isMerchantCommandResult(result) {
+    return (result?.ok === true &&
+        result?.isMerchantCommand === true &&
+        result?.commandMessage &&
+        result?.merchantResponseMessage);
+}
 const handleDmOpen = async (context) => {
     if (!(0, ws_auth_1.requireLogin)(context, ws_events_1.WS_EVENTS.DM_OPEN_EVENT))
         return;
@@ -97,6 +103,57 @@ const handleDmSend = async (context) => {
         (0, ws_utils_1.sendError)(context.socket, ws_events_1.WS_EVENTS.DM_SEND_EVENT, result.reason, context.message.request_id);
         return;
     }
+    /*
+      معالجة أوامر حساب merchant بشكل منفصل.
+  
+      نرسل أولًا تأكيد الرسالة التي كتبها المستخدم،
+      ثم نرسل رد merchant كرسالة واردة داخل نفس المحادثة.
+    */
+    if (isMerchantCommandResult(result)) {
+        const commandMessage = result.commandMessage;
+        const merchantResponseMessage = result.merchantResponseMessage;
+        console.log("[MERCHANT_DM_COMMAND_HANDLED]", {
+            fromUserId,
+            merchantUserId: commandMessage.toUserId,
+            chatId: commandMessage.chatId,
+            commandMessageId: commandMessage.messageId,
+            responseMessageId: merchantResponseMessage.messageId,
+            requestId: context.message.request_id,
+            at: new Date().toISOString(),
+        });
+        /*
+          تأكيد الرسالة المرسلة من المستخدم.
+          هذا يستبدل الرسالة المؤقتة في Flutter بالرسالة النهائية.
+        */
+        (0, ws_utils_1.sendSuccess)(context.socket, {
+            handler: ws_events_1.WS_EVENTS.DM_SEND_EVENT,
+            request_id: context.message.request_id,
+            message: commandMessage,
+            delivered: true,
+            storedInRedis: false,
+            targetHidden: false,
+            isFriend: true,
+            canShowTargetActivity: true,
+            isMerchantCommand: true,
+        });
+        /*
+          إرسال رد merchant إلى المستخدم نفسه كرسالة Incoming.
+          نستخدم نفس حدث الرسائل العادية حتى لا نحتاج
+          إلى إنشاء Event جديد داخل Flutter.
+        */
+        (0, ws_utils_1.sendSuccess)(context.socket, {
+            handler: ws_events_1.WS_EVENTS.DM_MESSAGE_EVENT,
+            type: "incoming",
+            message: merchantResponseMessage,
+            fromUsername: merchantResponseMessage.fromUsername,
+            fromPhotoUrl: merchantResponseMessage.fromPhotoUrl,
+            targetHidden: false,
+            isMerchantCommand: true,
+        });
+        return;
+    }
+    /*
+      هل الطرف الآخر فاتح نفس المحادثة؟
     /*
       هل الطرف الآخر فاتح نفس المحادثة؟
       هذا لا نستخدمه لتحديد delivered الآن.

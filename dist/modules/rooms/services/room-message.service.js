@@ -467,274 +467,6 @@ async function sendRoomLiveMessageService(input) {
         giftStatsResult,
     };
 }
-// export async function sendRoomLiveMessageService(input: {
-//   userId: string;
-//   username?: string;
-//   photoUrl?: string;
-//   roomId: string;
-//   type: RoomUserMessageType;
-//   text?: string;
-//   media?: any;
-//   mediaBase64?: string;
-//   fileName?: string;
-//   mimeType?: string;
-//   sizeBytes?: number;
-//   duration?: string;
-//   replyTo?: any;
-//   /*
-//     بيانات الهدية لو جاية من الفرونت
-//   */
-//   isGift?: boolean;
-//   giftKey?: string;
-//   targetUserId?: string;
-//   targetUsername?: string;
-// }) {
-//   const userId = sanitizeUserId(input.userId);
-//   const roomId = sanitizeRoomId(input.roomId);
-//   const type = sanitizeRoomUserMessageType(input.type);
-//   const text = sanitizeRoomMessageText(input.text);
-//   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-//   console.log("===== SEND_ROOM_LIVE_MESSAGE_SERVICE_START =====");
-//   console.log("[SEND_ROOM_LIVE_MESSAGE_SERVICE] raw input:", JSON.stringify(input, null, 2));
-//   console.log("[SEND_ROOM_LIVE_MESSAGE_SERVICE] sanitized:", {
-//     userId,
-//     roomId,
-//     type,
-//     text,
-//   });
-//   if (!userId || !roomId) {
-//     console.log("❌ [SEND_ROOM_LIVE_MESSAGE_SERVICE] invalid_message_payload");
-//     console.log("===== SEND_ROOM_LIVE_MESSAGE_SERVICE_END =====");
-//     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-//     return {
-//       ok: false as const,
-//       reason: "invalid_message_payload",
-//     };
-//   }
-//   const room = await RoomModel.findOne({ roomId }).lean();
-//   if (!room) {
-//     console.log("❌ [SEND_ROOM_LIVE_MESSAGE_SERVICE] room_not_found:", roomId);
-//     console.log("===== SEND_ROOM_LIVE_MESSAGE_SERVICE_END =====");
-//     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-//     return {
-//       ok: false as const,
-//       reason: "room_not_found",
-//     };
-//   }
-//   if (Array.isArray(room.bannedUsers) && room.bannedUsers.includes(userId)) {
-//     console.log("❌ [SEND_ROOM_LIVE_MESSAGE_SERVICE] user_banned_from_room:", {
-//       roomId,
-//       userId,
-//     });
-//     console.log("===== SEND_ROOM_LIVE_MESSAGE_SERVICE_END =====");
-//     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-//     return {
-//       ok: false as const,
-//       reason: "user_banned_from_room",
-//     };
-//   }
-//   const role = getRoomRole(room, userId);
-//   console.log("[SEND_ROOM_LIVE_MESSAGE_SERVICE] user role:", role);
-//   if (room.isLockedForNone && role === "none") {
-//     console.log("❌ [SEND_ROOM_LIVE_MESSAGE_SERVICE] room_locked_for_members_only:", {
-//       roomId,
-//       userId,
-//       role,
-//     });
-//     console.log("===== SEND_ROOM_LIVE_MESSAGE_SERVICE_END =====");
-//     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-//     return {
-//       ok: false as const,
-//       reason: "room_locked_for_members_only",
-//     };
-//   }
-//   let media = sanitizeRoomMedia(input.media);
-//   const hasBase64Media = isBase64Media(input.mediaBase64);
-//   console.log("[SEND_ROOM_LIVE_MESSAGE_SERVICE] media before upload:", JSON.stringify(media, null, 2));
-//   console.log("[SEND_ROOM_LIVE_MESSAGE_SERVICE] hasBase64Media:", hasBase64Media);
-//   if (!media && hasBase64Media) {
-//     media = await uploadRoomMediaBase64ToCloudinary({
-//       roomId,
-//       type,
-//       mediaBase64: clean(input.mediaBase64),
-//       fileName: input.fileName,
-//       mimeType: input.mimeType,
-//       sizeBytes: input.sizeBytes,
-//       duration: input.duration,
-//     });
-//     console.log("[SEND_ROOM_LIVE_MESSAGE_SERVICE] media after upload:", JSON.stringify(media, null, 2));
-//   }
-//   const replyTo = sanitizeRoomReply(input.replyTo);
-//   if (type === "text" && !text) {
-//     console.log("❌ [SEND_ROOM_LIVE_MESSAGE_SERVICE] empty_message");
-//     console.log("===== SEND_ROOM_LIVE_MESSAGE_SERVICE_END =====");
-//     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-//     return {
-//       ok: false as const,
-//       reason: "empty_message",
-//     };
-//   }
-//   if (
-//     (type === "image" ||
-//       type === "gif" ||
-//       type === "video" ||
-//       type === "audio" ||
-//       type === "voice") &&
-//     !media
-//   ) {
-//     console.log("❌ [SEND_ROOM_LIVE_MESSAGE_SERVICE] missing_media:", {
-//       type,
-//       media,
-//     });
-//     console.log("===== SEND_ROOM_LIVE_MESSAGE_SERVICE_END =====");
-//     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-//     return {
-//       ok: false as const,
-//       reason: "missing_media",
-//     };
-//   }
-//   /*
-//     @username msg
-//     لو النص يبدأ بمنشن، نرجع mentionDm للـ handler.
-//     الـ handler هو الذي يرسل DM باستخدام dm.service.
-//   */
-//   const parsedMention = type === "text" ? parseRoomMention(text) : null;
-//   let mention:
-//     | {
-//         username: string;
-//         userId: string;
-//         text: string;
-//       }
-//     | null = null;
-//   let mentionDm:
-//     | {
-//         toUserId: string;
-//         username: string;
-//         text: string;
-//       }
-//     | null = null;
-//   if (parsedMention) {
-//     const targetUser = await UserModel.findOne({
-//       username: parsedMention.username,
-//     })
-//       .select("userId username")
-//       .lean();
-//     if (targetUser) {
-//       mention = {
-//         username: parsedMention.username,
-//         userId: String((targetUser as any).userId || ""),
-//         text: parsedMention.text,
-//       };
-//       mentionDm = {
-//         toUserId: String((targetUser as any).userId || ""),
-//         username: parsedMention.username,
-//         text: parsedMention.text,
-//       };
-//     } else {
-//       mention = {
-//         username: parsedMention.username,
-//         userId: "",
-//         text: parsedMention.text,
-//       };
-//     }
-//   }
-//   const message: RoomLiveMessage = {
-//     messageId: makeRoomMessageId(),
-//     roomId,
-//     messageKind: "user",
-//     type,
-//     fromUserId: userId,
-//     fromUsername: clean(input.username),
-//     fromPhotoUrl: clean(input.photoUrl),
-//     fromRole: role,
-//     text,
-//     media: media as RoomLiveMedia | null,
-//     mention,
-//     gift: null,
-//     entryVideo: null,
-//     replyTo: replyTo as RoomReplyPayload | null,
-//     reactions: [],
-//     system: null,
-//     createdAt: nowIso(),
-//   };
-//   /*
-//     كشف الهدية:
-//     الهدية عندك حاليًا تصل كرسالة فيديو عادية:
-//     type: "video"
-//     text: "lina sent Blue Car to lina"
-//     media.fileName: "blue_car.mp4"
-//     لذلك نعتبرها هدية إذا:
-//     - input.isGift === true
-//     - أو giftKey موجود
-//     - أو اسم الملف blue_car
-//     - أو النص يحتوي sent / gift / to
-//   */
-//   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-//   console.log("🎁 [ROOM_MESSAGE_GIFT_CHECK]");
-//   console.log("type:", type);
-//   console.log("text:", text);
-//   console.log("input.isGift:", input.isGift);
-//   console.log("input.giftKey:", input.giftKey);
-//   console.log("input.targetUserId:", input.targetUserId);
-//   console.log("input.targetUsername:", input.targetUsername);
-//   console.log("media:", JSON.stringify(media || null, null, 2));
-//   const mediaFileName = clean((media as any)?.fileName).toLowerCase();
-//   const giftKey = clean(input.giftKey).toLowerCase();
-//   const lowerText = text.toLowerCase();
-//   const isGiftVideoMessage =
-//     input.isGift === true ||
-//     !!giftKey ||
-//     (
-//       type === "video" &&
-//       !!media &&
-//       (
-//         mediaFileName.includes("blue_car") ||
-//         lowerText.includes(" sent ") ||
-//         lowerText.includes(" gift ") ||
-//         lowerText.includes(" to ")
-//       )
-//     );
-//   console.log("🎁 [ROOM_MESSAGE_IS_GIFT_VIDEO]:", isGiftVideoMessage);
-//   let giftStatsResult: any = null;
-//   if (isGiftVideoMessage) {
-//     let targetUserId = sanitizeUserId(input.targetUserId);
-//     let targetUsername = clean(input.targetUsername);
-//     /*
-//       لو الفرونت لم يرسل targetUsername
-//       نحاول استخراجه من النص:
-//       lina sent Blue Car to lina
-//     */
-//     if (!targetUsername && text.includes(" to ")) {
-//       const parts = text.split(" to ");
-//       targetUsername = clean(parts[parts.length - 1]);
-//     }
-//     console.log("🎁 [ROOM_MESSAGE_GIFT_TARGET]");
-//     console.log("targetUserId:", targetUserId);
-//     console.log("targetUsername:", targetUsername);
-//     giftStatsResult = await incrementGiftStatsFromRoomMessage({
-//       fromUserId: userId,
-//       targetUserId,
-//       targetUsername,
-//       text,
-//     });
-//     console.log(
-//       "📊 [ROOM_MESSAGE_GIFT_STATS_RESULT]:",
-//       JSON.stringify(giftStatsResult, null, 2)
-//     );
-//   }
-//   console.log("[SEND_ROOM_LIVE_MESSAGE_SERVICE] final message:", JSON.stringify(message, null, 2));
-//   console.log("===== SEND_ROOM_LIVE_MESSAGE_SERVICE_DONE =====");
-//   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-//   return {
-//     ok: true as const,
-//     room,
-//     role,
-//     message,
-//     mention,
-//     mentionDm,
-//     giftStatsResult,
-//   };
-// }
 /*
   رسالة نظام Live فقط.
   تستخدمها في:
@@ -1093,11 +825,24 @@ function makeRoomEntryVideoMessage(input) {
   لأن الرسائل لا تحفظ، الرياكشن لا يحفظ في MongoDB.
   الـ handler يستقبل messageId ويرسل هذا الحدث لكل الموجودين في الغرفة.
 */
+/*
+  إنشاء حدث إضافة أو إزالة Reaction على رسالة Live.
+
+  ملاحظة:
+  هذه الدالة تنشئ بيانات المستخدم الذي غيّر الرياكشن فقط.
+  أما count وقائمة users الكاملة فيتم تكوينهما داخل الـ handler
+  بعد تحديث حالة الرياكشنات الموجودة في الذاكرة.
+*/
 function makeRoomReactionEvent(input) {
     const roomId = (0, room_sanitize_1.sanitizeRoomId)(input.roomId);
     const messageId = clean(input.messageId);
     const userId = (0, room_sanitize_1.sanitizeUserId)(input.userId);
+    const username = clean(input.username);
+    const photoUrl = clean(input.photoUrl);
     const emoji = clean(input.emoji).slice(0, 12);
+    const action = input.action === "remove"
+        ? "remove"
+        : "add";
     if (!roomId || !messageId || !userId || !emoji) {
         return {
             ok: false,
@@ -1109,9 +854,14 @@ function makeRoomReactionEvent(input) {
         reaction: {
             roomId,
             messageId,
-            userId,
             emoji,
-            createdAt: nowIso(),
+            action,
+            user: {
+                userId,
+                username,
+                photoUrl,
+                createdAt: nowIso(),
+            },
         },
     };
 }

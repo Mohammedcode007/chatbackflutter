@@ -66,6 +66,9 @@ function roomToClient(room: any, userId: string, extra?: any) {
 
     voiceEnabled: room.voiceEnabled === true,
 
+    room_image: String(room.roomImage || room.room_image || ""),
+    country: String(room.country || ""),
+
     boostScore: Number(extra?.boostScore || 0),
     boostCount: Number(extra?.boostCount || 0),
 

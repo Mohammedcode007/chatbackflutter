@@ -177,6 +177,14 @@ const RoomSchema = new mongoose_1.Schema({
         type: Boolean,
         default: false,
     },
+    roomImage: {
+        type: String,
+        default: "",
+    },
+    country: {
+        type: String,
+        default: "",
+    },
 }, {
     timestamps: true,
 });

@@ -15,11 +15,13 @@ const ws_1 = __importDefault(require("ws"));
 const id_1 = require("../../utils/id");
 const clients = new Map();
 const userSockets = new Map();
-function addClient(socket) {
+function addClient(socket, clientIp, upgradeHeaders) {
     const now = new Date();
     clients.set(socket, {
         socket,
         connectionId: (0, id_1.createId)(),
+        clientIp,
+        upgradeHeaders,
         isLoggedIn: false,
         isAlive: true,
         rooms: new Set(),

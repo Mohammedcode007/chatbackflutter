@@ -5,12 +5,18 @@ import { createId } from "../../utils/id";
 const clients = new Map<WebSocket, ClientInfo>();
 const userSockets = new Map<string, Set<WebSocket>>();
 
-export function addClient(socket: WebSocket) {
+export function addClient(
+  socket: WebSocket,
+  clientIp?: string,
+  upgradeHeaders?: Record<string, string | string[] | undefined>
+) {
   const now = new Date();
 
   clients.set(socket, {
     socket,
     connectionId: createId(),
+    clientIp,
+    upgradeHeaders,
     isLoggedIn: false,
     isAlive: true,
     rooms: new Set<string>(),

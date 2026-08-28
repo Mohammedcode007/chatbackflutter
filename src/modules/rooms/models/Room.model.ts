@@ -82,6 +82,9 @@ export type RoomDocument = Document & {
 
   voiceEnabled: boolean;
 
+  roomImage: string;
+  country: string;
+
   createdAt: Date;
   updatedAt: Date;
 };
@@ -259,6 +262,16 @@ const RoomSchema = new Schema<RoomDocument>(
     voiceEnabled: {
       type: Boolean,
       default: false,
+    },
+
+    roomImage: {
+      type: String,
+      default: "",
+    },
+
+    country: {
+      type: String,
+      default: "",
     },
   },
   {

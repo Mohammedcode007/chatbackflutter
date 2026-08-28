@@ -21,6 +21,14 @@ const User_model_1 = require("../../../models/User.model");
 const ROOM_MESSAGE_EVENT = "room.message";
 const ROOM_USERS_EVENT = "room.users";
 const ROOM_ACTIVE_COUNT_EVENT = "room.active_count.update";
+const ROOM_REACTION_EVENT = "room.message.reaction";
+/*
+  roomId
+    -> messageId
+      -> emoji
+        -> userId -> user
+*/
+const roomMessageReactions = new Map();
 function text(value) {
     return String(value || "").trim();
 }
@@ -473,8 +481,8 @@ function makeRoomModerationMessage(input) {
     const targetUsername = text(input.targetUsername) || "User";
     const isBan = input.action === "ban";
     const textValue = isBan
-  ? `${actorUsername} banned ${targetUsername}`
-  : `${actorUsername} kicked ${targetUsername}`;
+        ? `${actorUsername} banned ${targetUsername}`
+        : `${actorUsername} kicked ${targetUsername}`;
     return {
         messageId: `${input.action}_${input.actorId}_${input.targetUserId}_${now}`,
         roomId: input.roomId,
@@ -518,30 +526,58 @@ const handleRoomBan = async (context) => {
         }
         const actorId = context.client.userId;
         const actorUsername = text(context.client?.username);
-        const roomId = text(context.message.roomId || context.message.room_id);
-        const targetUserId = text(context.message.targetUserId || context.message.target_user_id);
-        const targetUsername = text(context.message.targetUsername || context.message.target_username);
-        const targetIp = text(context.message.targetIp || context.message.target_ip);
-        const banIp = boolValue(context.message.banIp || context.message.ban_ip);
+        const roomId = text(context.message.roomId ||
+            context.message.room_id);
+        const receivedTargetUserId = text(context.message.targetUserId ||
+            context.message.target_user_id);
+        const receivedTargetUsername = text(context.message.targetUsername ||
+            context.message.target_username);
+        const targetIp = text(context.message.targetIp ||
+            context.message.target_ip);
+        const banIp = boolValue(context.message.banIp ||
+            context.message.ban_ip);
         if (!roomId) {
             (0, ws_utils_1.sendError)(context.socket, ws_events_1.WS_EVENTS.ROOM_UPDATE_EVENT, "room_id_required", context.message.request_id);
             logEnd(logName);
             return;
         }
-        if (!targetUserId) {
-            (0, ws_utils_1.sendError)(context.socket, ws_events_1.WS_EVENTS.ROOM_UPDATE_EVENT, "target_user_id_required", context.message.request_id);
+        /*
+          نسمح بإرسال الـ ID أو اسم المستخدم.
+        */
+        const targetResult = await resolveTargetUser({
+            targetUserId: receivedTargetUserId,
+            targetUsername: receivedTargetUsername,
+        });
+        if (!targetResult.ok) {
+            (0, ws_utils_1.sendError)(context.socket, ws_events_1.WS_EVENTS.ROOM_UPDATE_EVENT, targetResult.reason, context.message.request_id);
             logEnd(logName);
             return;
         }
+        const targetUserId = targetResult.userId;
+        const finalTargetUsername = targetResult.username;
         const targetLiveUser = getRoomLiveUser(roomId, targetUserId);
-        const finalTargetUsername = targetUsername || text(targetLiveUser?.username) || targetUserId;
+        /*
+          عند حظر IP، حاول قراءة IP من المستخدم الموجود داخل الغرفة
+          إذا لم يصل targetIp من الفرونت.
+        */
+        const finalTargetIp = targetIp ||
+            text(targetLiveUser?.ip) ||
+            text(targetLiveUser?.clientIp);
+        console.log(`[${logName}] resolved target:`, {
+            receivedTargetUserId,
+            receivedTargetUsername,
+            targetUserId,
+            finalTargetUsername,
+            targetIp: finalTargetIp,
+            banIp,
+        });
         const result = await (0, room_ban_service_1.banUserFromRoomService)({
             actorId,
             actorUsername,
             targetUserId,
             targetUsername: finalTargetUsername,
             roomId,
-            targetIp,
+            targetIp: finalTargetIp,
             banIp,
         });
         console.log(`[${logName}] service result:`, result);
@@ -550,6 +586,25 @@ const handleRoomBan = async (context) => {
             logEnd(logName);
             return;
         }
+        /*
+      عند حظر المستخدم:
+      نحذفه من جميع رتب الغرفة نهائيًا.
+    */
+        await Room_model_1.RoomModel.updateOne({ roomId }, {
+            $pull: {
+                owners: targetUserId,
+                admins: targetUserId,
+                members: targetUserId,
+            },
+        });
+        /*
+          تحديث النسخة الموجودة في الذاكرة قبل إخراجه.
+        */
+        (0, roomClients_store_1.updateRoomUserRole)({
+            roomId,
+            userId: targetUserId,
+            role: "none",
+        });
         forceUserLeaveLiveRoom({
             context,
             roomId,
@@ -659,6 +714,20 @@ const handleRoomRoleSet = async (context) => {
             return;
         }
         /*
+          عند إعطاء رتبة فعلية للمستخدم:
+          نفك حظره تلقائيًا من الغرفة.
+          لا ننفذ هذا عند إزالة الرتبة newRole = none.
+        */
+        if (result.newRole !== "none") {
+            await Room_model_1.RoomModel.updateOne({ roomId }, {
+                $pull: {
+                    bannedUsers: {
+                        userId: targetUserId,
+                    },
+                },
+            });
+        }
+        /*
           تحديث الرتبة داخل اللايف memory
           لو المستخدم موجود داخل الغرفة الآن.
           لو خارج الغرفة، الرتبة تحفظ في MongoDB فقط،
@@ -727,12 +796,16 @@ const handleRoomCreate = async (context) => {
         const description = text(context.message.description);
         const password = text(context.message.password);
         const voiceEnabled = boolValue(context.message.voiceEnabled);
+        const roomImage = text(context.message.room_image || context.message.roomImage);
+        const countryCode = text(context.message.country || context.message.countryCode);
         const result = await (0, room_create_service_1.createRoomService)({
             creatorId,
             name,
             password,
             description,
             voiceEnabled,
+            roomImage,
+            countryCode,
         });
         console.log(`[${logName}] service result:`, result);
         if (!result.ok) {
@@ -1037,6 +1110,67 @@ const handleRoomList = async (context) => {
         logEnd(logName);
     }
 };
+const handleRoomUpdate = async (context) => {
+    const logName = "ROOM_UPDATE_HANDLER";
+    try {
+        logStart(logName, context);
+        if (!(0, ws_auth_1.requireLogin)(context, ws_events_1.WS_EVENTS.ROOM_UPDATE_EVENT)) {
+            console.log(`[${logName}] requireLogin failed`);
+            logEnd(logName);
+            return;
+        }
+        const actorId = context.client.userId;
+        const room_id = text(context.message.room_id || context.message.roomId || context.message.id);
+        const name = text(context.message.name);
+        const roomImage = text(context.message.room_image || context.message.roomImage);
+        const country = text(context.message.country);
+        if (!room_id) {
+            (0, ws_utils_1.sendError)(context.socket, ws_events_1.WS_EVENTS.ROOM_UPDATE_EVENT, "room_id_required", context.message.request_id);
+            logEnd(logName);
+            return;
+        }
+        const room = await Room_model_1.RoomModel.findOne({ roomId: room_id });
+        if (!room) {
+            (0, ws_utils_1.sendError)(context.socket, ws_events_1.WS_EVENTS.ROOM_UPDATE_EVENT, "room_not_found", context.message.request_id);
+            logEnd(logName);
+            return;
+        }
+        const isCreator = room.creatorId === actorId;
+        const isOwner = (room.owners || []).includes(actorId);
+        const isAdmin = (room.admins || []).includes(actorId);
+        if (!isCreator && !isOwner && !isAdmin) {
+            (0, ws_utils_1.sendError)(context.socket, ws_events_1.WS_EVENTS.ROOM_UPDATE_EVENT, "permission_denied", context.message.request_id);
+            logEnd(logName);
+            return;
+        }
+        const updateData = {};
+        if (name)
+            updateData.name = name;
+        if (roomImage)
+            updateData.roomImage = roomImage;
+        if (country)
+            updateData.country = country;
+        const updatedRoom = await Room_model_1.RoomModel.findOneAndUpdate({ roomId: room_id }, { $set: updateData }, { new: true });
+        (0, ws_utils_1.sendSuccess)(context.socket, {
+            handler: ws_events_1.WS_EVENTS.ROOM_UPDATE_EVENT,
+            type: "success",
+            request_id: context.message.request_id,
+            room: updatedRoom,
+        });
+        broadcastToRoomUsers(room_id, {
+            handler: ws_events_1.WS_EVENTS.ROOM_UPDATE_EVENT,
+            type: "room_updated",
+            roomId: room_id,
+            room: updatedRoom,
+        });
+        logEnd(logName);
+    }
+    catch (error) {
+        console.error(`[${logName}] unexpected error:`, error);
+        (0, ws_utils_1.sendError)(context.socket, ws_events_1.WS_EVENTS.ROOM_UPDATE_EVENT, "room_update_failed", context.message.request_id);
+        logEnd(logName);
+    }
+};
 const handleRoomMessageSend = async (context) => {
     const logName = "ROOM_MESSAGE_SEND_HANDLER";
     try {
@@ -1126,6 +1260,151 @@ const handleRoomMessageSend = async (context) => {
     catch (error) {
         console.error(`[${logName}] unexpected error:`, error);
         (0, ws_utils_1.sendError)(context.socket, ws_events_1.WS_EVENTS.ROOM_MESSAGE_SEND_EVENT, "room_message_send_failed", context.message.request_id);
+        logEnd(logName);
+    }
+};
+const handleRoomMessageReaction = async (context) => {
+    const logName = "ROOM_MESSAGE_REACTION_HANDLER";
+    try {
+        logStart(logName, context);
+        if (!(0, ws_auth_1.requireLogin)(context, ws_events_1.WS_EVENTS.ROOM_REACTION_EVENT)) {
+            console.log(`[${logName}] requireLogin failed`);
+            logEnd(logName);
+            return;
+        }
+        const userId = text(context.client?.userId);
+        const username = text(context.client?.username) || "User";
+        const photoUrl = text(context.client?.photoUrl);
+        const roomId = text(context.message.roomId ||
+            context.message.room_id);
+        const messageId = text(context.message.messageId ||
+            context.message.message_id);
+        const emoji = text(context.message.emoji);
+        if (!roomId) {
+            (0, ws_utils_1.sendError)(context.socket, ws_events_1.WS_EVENTS.ROOM_REACTION_EVENT, "room_id_required", context.message.request_id);
+            logEnd(logName);
+            return;
+        }
+        if (!messageId) {
+            (0, ws_utils_1.sendError)(context.socket, ws_events_1.WS_EVENTS.ROOM_REACTION_EVENT, "message_id_required", context.message.request_id);
+            logEnd(logName);
+            return;
+        }
+        if (!emoji) {
+            (0, ws_utils_1.sendError)(context.socket, ws_events_1.WS_EVENTS.ROOM_REACTION_EVENT, "emoji_required", context.message.request_id);
+            logEnd(logName);
+            return;
+        }
+        const userStillInRoom = (0, roomClients_store_1.isUserInRoom)({
+            roomId,
+            userId,
+        });
+        if (!userStillInRoom) {
+            (0, ws_utils_1.sendError)(context.socket, ws_events_1.WS_EVENTS.ROOM_REACTION_EVENT, "room_not_joined", context.message.request_id);
+            logEnd(logName);
+            return;
+        }
+        let roomReactions = roomMessageReactions.get(roomId);
+        if (!roomReactions) {
+            roomReactions = new Map();
+            roomMessageReactions.set(roomId, roomReactions);
+        }
+        let messageReactions = roomReactions.get(messageId);
+        if (!messageReactions) {
+            messageReactions = new Map();
+            roomReactions.set(messageId, messageReactions);
+        }
+        let emojiUsers = messageReactions.get(emoji);
+        if (!emojiUsers) {
+            emojiUsers = new Map();
+            messageReactions.set(emoji, emojiUsers);
+        }
+        /*
+          الضغط على نفس الإيموجي مرة ثانية
+          يلغي الرياكشن.
+        */
+        const alreadyReacted = emojiUsers.has(userId);
+        if (alreadyReacted) {
+            emojiUsers.delete(userId);
+        }
+        else {
+            emojiUsers.set(userId, {
+                userId,
+                username,
+                photoUrl,
+                createdAt: new Date().toISOString(),
+            });
+        }
+        /*
+          حذف مجموعة الإيموجي إذا أصبحت فارغة.
+        */
+        if (emojiUsers.size === 0) {
+            messageReactions.delete(emoji);
+        }
+        /*
+          حذف الرسالة من الخريطة إذا لم يعد
+          عليها أي رياكشن.
+        */
+        if (messageReactions.size === 0) {
+            roomReactions.delete(messageId);
+        }
+        /*
+          تكوين القائمة المجمعة النهائية.
+        */
+        const reactions = [];
+        for (const [reactionEmoji, usersMap,] of messageReactions.entries()) {
+            const users = Array.from(usersMap.values());
+            reactions.push({
+                emoji: reactionEmoji,
+                count: users.length,
+                users,
+            });
+        }
+        const action = alreadyReacted
+            ? "remove"
+            : "add";
+        /*
+          تأكيد للمرسل.
+        */
+        (0, ws_utils_1.sendSuccess)(context.socket, {
+            handler: ws_events_1.WS_EVENTS.ROOM_REACTION_EVENT,
+            type: "success",
+            request_id: context.message.request_id,
+            roomId,
+            messageId,
+            emoji,
+            action,
+            reactions,
+        });
+        /*
+          إرسال التحديث لكل مستخدمي الغرفة.
+        */
+        broadcastToRoomUsers(roomId, {
+            handler: ROOM_REACTION_EVENT,
+            type: "reaction",
+            roomId,
+            messageId,
+            emoji,
+            action,
+            user: {
+                userId,
+                username,
+                photoUrl,
+            },
+            reactions,
+        });
+        console.log(`[${logName}] reaction updated:`, {
+            roomId,
+            messageId,
+            emoji,
+            action,
+            reactionsCount: reactions.length,
+        });
+        logEnd(logName);
+    }
+    catch (error) {
+        console.error(`[${logName}] unexpected error:`, error);
+        (0, ws_utils_1.sendError)(context.socket, ws_events_1.WS_EVENTS.ROOM_REACTION_EVENT, "room_message_reaction_failed", context.message.request_id);
         logEnd(logName);
     }
 };
@@ -1534,6 +1813,139 @@ const handleRoomBannedList = async (context) => {
         logEnd(logName);
     }
 };
+const handleRoomUnban = async (context) => {
+    const logName = "ROOM_UNBAN_HANDLER";
+    try {
+        logStart(logName, context);
+        if (!(0, ws_auth_1.requireLogin)(context, ws_events_1.WS_EVENTS.ROOM_UPDATE_EVENT)) {
+            logEnd(logName);
+            return;
+        }
+        const actorId = context.client.userId;
+        const actorUsername = text(context.client?.username);
+        const roomId = text(context.message.roomId ||
+            context.message.room_id);
+        const rawTargetUserId = text(context.message.targetUserId ||
+            context.message.target_user_id);
+        const rawTargetUsername = text(context.message.targetUsername ||
+            context.message.target_username);
+        if (!roomId) {
+            (0, ws_utils_1.sendError)(context.socket, ws_events_1.WS_EVENTS.ROOM_UPDATE_EVENT, "room_id_required", context.message.request_id);
+            logEnd(logName);
+            return;
+        }
+        /*
+          يقبل ID أو اسم المستخدم.
+        */
+        const resolvedTarget = await resolveTargetUser({
+            targetUserId: rawTargetUserId,
+            targetUsername: rawTargetUsername,
+        });
+        if (!resolvedTarget.ok) {
+            (0, ws_utils_1.sendError)(context.socket, ws_events_1.WS_EVENTS.ROOM_UPDATE_EVENT, resolvedTarget.reason, context.message.request_id);
+            logEnd(logName);
+            return;
+        }
+        const targetUserId = resolvedTarget.userId;
+        const targetUsername = resolvedTarget.username;
+        const room = await Room_model_1.RoomModel.findOne({ roomId });
+        if (!room) {
+            (0, ws_utils_1.sendError)(context.socket, ws_events_1.WS_EVENTS.ROOM_UPDATE_EVENT, "room_not_found", context.message.request_id);
+            logEnd(logName);
+            return;
+        }
+        /*
+          تحديد رتبة منفذ فك الحظر.
+          فك الحظر متاح للـ creator والـ owner.
+        */
+        const actorRole = String(room.creatorId || "") === actorId
+            ? "creator"
+            : Array.isArray(room.owners) &&
+                room.owners.map(String).includes(actorId)
+                ? "owner"
+                : Array.isArray(room.admins) &&
+                    room.admins.map(String).includes(actorId)
+                    ? "admin"
+                    : Array.isArray(room.members) &&
+                        room.members.map(String).includes(actorId)
+                        ? "member"
+                        : "none";
+        if (actorRole !== "creator" && actorRole !== "owner") {
+            (0, ws_utils_1.sendError)(context.socket, ws_events_1.WS_EVENTS.ROOM_UPDATE_EVENT, "no_permission", context.message.request_id);
+            logEnd(logName);
+            return;
+        }
+        /*
+          العثور على سجل المستخدم قبل حذفه،
+          حتى نحذف عنوان IP المرتبط به عند توفره.
+        */
+        const bannedEntry = Array.isArray(room.bannedUsers)
+            ? room.bannedUsers.find((item) => {
+                return text(item?.userId) === targetUserId;
+            })
+            : null;
+        const bannedIp = text(bannedEntry?.ip ||
+            bannedEntry?.targetIp ||
+            bannedEntry?.clientIp);
+        /*
+          إزالة المستخدم من قائمة الحظر.
+        */
+        room.bannedUsers = Array.isArray(room.bannedUsers)
+            ? room.bannedUsers.filter((item) => {
+                const bannedUserId = typeof item === "object"
+                    ? text(item?.userId)
+                    : text(item);
+                return bannedUserId !== targetUserId;
+            })
+            : [];
+        /*
+          إزالة IP الخاص به من قائمة الحظر إن كان محفوظًا.
+        */
+        if (bannedIp && Array.isArray(room.bannedIps)) {
+            room.bannedIps = room.bannedIps.filter((ip) => {
+                return text(ip) !== bannedIp;
+            });
+        }
+        await room.save();
+        console.log(`[${logName}] user unbanned:`, {
+            actorId,
+            actorUsername,
+            roomId,
+            targetUserId,
+            targetUsername,
+            bannedIp,
+        });
+        (0, ws_utils_1.sendSuccess)(context.socket, {
+            handler: ws_events_1.WS_EVENTS.ROOM_UPDATE_EVENT,
+            type: "unban",
+            request_id: context.message.request_id,
+            roomId,
+            targetUserId,
+            targetUsername,
+            message: "user_unbanned",
+        });
+        /*
+          إرسال القائمة الجديدة مباشرة حتى تختفي من الشاشة.
+        */
+        (0, ws_utils_1.sendSuccess)(context.socket, {
+            handler: ws_events_1.WS_EVENTS.ROOM_UPDATE_EVENT,
+            type: "banned_list",
+            roomId,
+            bannedUsers: Array.isArray(room.bannedUsers)
+                ? room.bannedUsers
+                : [],
+            bannedIps: Array.isArray(room.bannedIps)
+                ? room.bannedIps
+                : [],
+        });
+        logEnd(logName);
+    }
+    catch (error) {
+        console.error(`[${logName}] unexpected error:`, error);
+        (0, ws_utils_1.sendError)(context.socket, ws_events_1.WS_EVENTS.ROOM_UPDATE_EVENT, "room_unban_failed", context.message.request_id);
+        logEnd(logName);
+    }
+};
 const handleRoomRoleRemove = async (context) => {
     const logName = "ROOM_ROLE_REMOVE_HANDLER";
     try {
@@ -1624,16 +2036,19 @@ exports.roomHandlers = {
     [ws_events_1.WS_HANDLERS.ROOM_JOIN]: handleRoomJoin,
     [ws_events_1.WS_HANDLERS.ROOM_LEAVE]: handleRoomLeave,
     [ws_events_1.WS_HANDLERS.ROOM_LIST]: handleRoomList,
+    [ws_events_1.WS_HANDLERS.ROOM_UPDATE]: handleRoomUpdate,
     [ws_events_1.WS_HANDLERS.ROOM_MESSAGE_SEND]: handleRoomMessageSend,
     [ws_events_1.WS_HANDLERS.ROOM_FAVORITE_TOGGLE]: handleRoomFavoriteToggle,
     [ws_events_1.WS_HANDLERS.ROOM_BOOST]: handleRoomBoost,
     [ws_events_1.WS_HANDLERS.ROOM_ROLE_SET]: handleRoomRoleSet,
+    [ws_events_1.WS_HANDLERS.ROOM_MESSAGE_REACTION]: handleRoomMessageReaction,
     [ws_events_1.WS_HANDLERS.ROOM_KICK]: handleRoomKick,
     [ws_events_1.WS_HANDLERS.ROOM_BAN]: handleRoomBan,
     [ws_events_1.WS_HANDLERS.ROOM_SET_PASSWORD]: handleRoomPasswordSet,
     [ws_events_1.WS_HANDLERS.ROOM_LOCK_SET]: handleRoomLockSet,
     [ws_events_1.WS_HANDLERS.ROOM_PIN_SET]: handleRoomPinSet,
     [ws_events_1.WS_HANDLERS.ROOM_ROLES_LIST]: handleRoomRolesList,
+    [ws_events_1.WS_HANDLERS.ROOM_UNBAN]: handleRoomUnban,
     [ws_events_1.WS_HANDLERS.ROOM_ROLE_REMOVE]: handleRoomRoleRemove,
     [ws_events_1.WS_HANDLERS.ROOM_LOGS_LIST]: handleRoomLogsList,
     [ws_events_1.WS_HANDLERS.ROOM_BANNED_LIST]: handleRoomBannedList,

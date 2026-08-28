@@ -1,7 +1,9 @@
 
 import type { WsHandler } from "../../websocket/ws.types";
+import crypto from "crypto";
 
 import {
+  safeSend,
   sendError,
   sendSuccess,
 } from "../../websocket/ws.utils";
@@ -42,12 +44,19 @@ import {
 } from "./auth.service";
 
 import {
-  deliverPendingPrivateMessages,
-} from "../chats/chats.delivery";
+  extractDeviceInfo,
+  lookupCountryCode,
+  getActiveSessions,
+  revokeSession,
+} from "./session.service";
 
 import {
   getAndClearPendingDmMessages,
 } from "../dm/dm.service";
+
+import {
+  deliverPendingPrivateMessages,
+} from "../chats/chats.delivery";
 
 /*
   إرسال تحديث حالة المستخدم إلى أصدقائه.
@@ -187,12 +196,14 @@ const notifyFriendsAboutAuthStatus = async (
 const saveLoggedInClient = (
   context: Parameters<WsHandler>[0],
   user: any,
-  session: string
+  session: string,
+  sessionId?: string
 ) => {
   console.log("[AUTH] Save logged-in client:", {
     userId: user.userId,
     username: user.username,
     session,
+    sessionId,
   });
 
   updateClient(context.socket, {
@@ -204,6 +215,7 @@ const saveLoggedInClient = (
     photoUrl: user.photoUrl || "",
 
     session,
+    sessionId,
 
     isLoggedIn: true,
   });
@@ -217,7 +229,8 @@ const sendAuthSuccess = (
   eventHandler: string,
   user: any,
   token: string,
-  sessionExpiresAt: string
+  sessionExpiresAt: string,
+  sessionId?: string
 ) => {
   console.log("[AUTH] Sending auth success:", {
     handler: eventHandler,
@@ -240,6 +253,7 @@ const sendAuthSuccess = (
 
     token,
     session_expires_at: sessionExpiresAt,
+    session_id: sessionId || "",
 
     user,
   });
@@ -331,8 +345,19 @@ const handleRegister: WsHandler = async (
     return;
   }
 
+  const ipAddress = context.client?.clientIp || "";
+  const countryCode = lookupCountryCode(ipAddress);
+  const deviceInfo = extractDeviceInfo(
+    context.client?.upgradeHeaders,
+    message.deviceInfo
+  );
+
   const result =
-    await registerService(message);
+    await registerService(message, {
+      ipAddress,
+      countryCode,
+      deviceInfo,
+    });
 
   if (!result.ok) {
     console.log(
@@ -355,7 +380,8 @@ const handleRegister: WsHandler = async (
   saveLoggedInClient(
     context,
     user,
-    message.session
+    message.session,
+    result.sessionId
   );
 
   sendAuthSuccess(
@@ -363,7 +389,8 @@ const handleRegister: WsHandler = async (
     WS_EVENTS.REGISTER_EVENT,
     user,
     result.token,
-    result.sessionExpiresAt
+    result.sessionExpiresAt,
+    result.sessionId
   );
 
   await notifyFriendsAboutAuthStatus(
@@ -412,7 +439,18 @@ const handleLogin: WsHandler = async (
     return;
   }
 
-  const result = await loginService(message);
+  const ipAddress = context.client?.clientIp || "";
+  const countryCode = lookupCountryCode(ipAddress);
+  const deviceInfo = extractDeviceInfo(
+    context.client?.upgradeHeaders,
+    message.deviceInfo
+  );
+
+  const result = await loginService(message, {
+    ipAddress,
+    countryCode,
+    deviceInfo,
+  });
 
   if (!result.ok) {
     console.log(
@@ -435,7 +473,8 @@ const handleLogin: WsHandler = async (
   saveLoggedInClient(
     context,
     user,
-    message.session
+    message.session,
+    result.sessionId
   );
 
   sendAuthSuccess(
@@ -443,7 +482,8 @@ const handleLogin: WsHandler = async (
     WS_EVENTS.LOGIN_EVENT,
     user,
     result.token,
-    result.sessionExpiresAt
+    result.sessionExpiresAt,
+    result.sessionId
   );
 
   await deliverPendingDmForUser(
@@ -506,8 +546,19 @@ const handleResume: WsHandler = async (
     return;
   }
 
+  const ipAddress = context.client?.clientIp || "";
+  const countryCode = lookupCountryCode(ipAddress);
+  const deviceInfo = extractDeviceInfo(
+    context.client?.upgradeHeaders,
+    message.deviceInfo
+  );
+
   const result =
-    await resumeService(message);
+    await resumeService(message, {
+      ipAddress,
+      countryCode,
+      deviceInfo,
+    });
 
   if (!result.ok) {
     console.log(
@@ -537,7 +588,8 @@ const handleResume: WsHandler = async (
   saveLoggedInClient(
     context,
     user,
-    message.session
+    message.session,
+    result.sessionId
   );
 
   /*
@@ -549,7 +601,8 @@ const handleResume: WsHandler = async (
     WS_EVENTS.LOGIN_EVENT,
     user,
     result.token,
-    result.sessionExpiresAt
+    result.sessionExpiresAt,
+    result.sessionId
   );
 
   await deliverPendingDmForUser(
@@ -585,13 +638,18 @@ const handleLogout: WsHandler = async (
   const userId =
     context.client?.userId;
 
+  const sessionId =
+    context.client?.sessionId;
+
   console.log("[AUTH LOGOUT] Request:", {
     userId,
+    sessionId,
     requestId: message.request_id,
   });
 
   await logoutService({
     userId,
+    sessionId,
   });
 
   if (userId) {
@@ -613,6 +671,7 @@ const handleLogout: WsHandler = async (
     username: undefined,
     photoUrl: undefined,
     session: undefined,
+    sessionId: undefined,
     isLoggedIn: false,
     activeRoomId: undefined,
     activeChatId: undefined,
@@ -801,6 +860,173 @@ const handleResetPassword: WsHandler = async (
   console.log("[AUTH RESET PASSWORD] Completed");
 };
 
+/*
+  جلب جلسات المستخدم النشطة عبر WebSocket.
+  Flutter يرسل:
+  {
+    handler: "sessions.list",
+    token: userAuthToken,
+    request_id: "..."
+  }
+*/
+function extractTokenFromMessage(message: any): string {
+  const cleanToken = (value: any) => {
+    return String(value || "")
+      .trim()
+      .replace(/^Bearer\s+/i, "")
+      .trim();
+  };
+
+  return (
+    cleanToken(message.token) ||
+    cleanToken(message.authorization) ||
+    cleanToken(message.data?.token) ||
+    cleanToken(message.data?.authorization)
+  );
+}
+
+function extractTokenFromHandshake(client: any): string {
+  const headers = client?.upgradeHeaders || {};
+
+  const headerValue = (key: string) => {
+    const value = headers[key];
+    if (Array.isArray(value)) return value[0] || "";
+    return String(value || "");
+  };
+
+  return String(headerValue("authorization") || "")
+    .replace(/^Bearer\s+/i, "")
+    .trim();
+}
+
+const handleSessionsList: WsHandler = async (context) => {
+  const { socket, message } = context;
+
+  const token =
+    extractTokenFromMessage(message) || extractTokenFromHandshake(context.client);
+
+  console.log("[AUTH SESSIONS_LIST] Request:", {
+    requestId: message.request_id,
+    hasToken: Boolean(token),
+  });
+
+  if (!token) {
+    sendError(
+      socket,
+      WS_EVENTS.SESSIONS_LIST_EVENT,
+      "token_required",
+      message.request_id
+    );
+    return;
+  }
+
+  const sessionTokenHash = crypto
+    .createHash("sha256")
+    .update(token)
+    .digest("hex");
+
+  const user = await UserModel.findOne({
+    sessionTokenHash,
+    $or: [
+      { sessionExpiresAt: null },
+      { sessionExpiresAt: { $gt: new Date() } },
+    ],
+  }).select("+sessionTokenHash +sessionExpiresAt");
+
+  if (!user) {
+    sendError(
+      socket,
+      WS_EVENTS.SESSIONS_LIST_EVENT,
+      "invalid_or_expired_token",
+      message.request_id
+    );
+    return;
+  }
+
+  const currentSessionId = String(
+    message.sessionId || message.session_id || ""
+  ).trim();
+
+  const sessions = await getActiveSessions(user.userId, currentSessionId);
+
+  safeSend(socket, {
+    handler: WS_EVENTS.SESSIONS_LIST_EVENT,
+    type: "response",
+    status: "success",
+    request_id: message.request_id,
+    data: sessions,
+  });
+};
+
+/*
+  إلغاء جلسة محددة عبر WebSocket.
+  Flutter يرسل:
+  {
+    handler: "sessions.revoke",
+    token: userAuthToken,
+    session_id: "...",
+    request_id: "..."
+  }
+*/
+const handleSessionRevoke: WsHandler = async (context) => {
+  const { socket, message } = context;
+
+  const token = String(message.token || "").trim();
+  const sessionId = String(message.session_id || message.sessionId || "").trim();
+
+  if (!token) {
+    sendError(
+      socket,
+      WS_EVENTS.SESSION_REVOKE_EVENT,
+      "token_required",
+      message.request_id
+    );
+    return;
+  }
+
+  const sessionTokenHash = crypto
+    .createHash("sha256")
+    .update(token)
+    .digest("hex");
+
+  const user = await UserModel.findOne({
+    sessionTokenHash,
+    $or: [
+      { sessionExpiresAt: null },
+      { sessionExpiresAt: { $gt: new Date() } },
+    ],
+  }).select("+sessionTokenHash +sessionExpiresAt");
+
+  if (!user) {
+    sendError(
+      socket,
+      WS_EVENTS.SESSION_REVOKE_EVENT,
+      "invalid_or_expired_token",
+      message.request_id
+    );
+    return;
+  }
+
+  if (!sessionId) {
+    sendError(
+      socket,
+      WS_EVENTS.SESSION_REVOKE_EVENT,
+      "session_id_required",
+      message.request_id
+    );
+    return;
+  }
+
+  const revoked = await revokeSession(user.userId, sessionId);
+
+  sendSuccess(socket, {
+    handler: WS_EVENTS.SESSION_REVOKE_EVENT,
+    request_id: message.request_id,
+    session_id: sessionId,
+    revoked,
+  });
+};
+
 export const authHandlers = {
   /*
     Register
@@ -864,4 +1090,13 @@ export const authHandlers = {
 
   reset_password:
     handleResetPassword,
+
+  /*
+    Sessions
+  */
+  [WS_HANDLERS.AUTH_SESSIONS_LIST]:
+    handleSessionsList,
+
+  [WS_HANDLERS.AUTH_SESSION_REVOKE]:
+    handleSessionRevoke,
 };

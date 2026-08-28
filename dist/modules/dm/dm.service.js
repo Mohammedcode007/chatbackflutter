@@ -9,6 +9,8 @@ const cloudinary_1 = require("cloudinary");
 const User_model_1 = require("../../models/User.model");
 const clients_store_1 = require("../../websocket/stores/clients.store");
 const pushNotification_service_1 = require("../../services/pushNotification.service");
+const merchant_config_1 = require("../../features/merchant/merchant.config");
+const merchant_command_service_1 = require("../../features/merchant/merchant-command.service");
 const dm_redis_1 = require("./dm.redis");
 function makeChatId(a, b) {
     return [a, b].sort().join("_");
@@ -111,6 +113,8 @@ async function checkDmPermissionOnly(input) {
             reason: "user_not_found",
         };
     }
+    const targetIsMerchant = readText(toUser.username).toLowerCase() ===
+        merchant_config_1.merchantConfig.username.toLowerCase();
     const fromBlocked = Array.isArray(fromUser.blockedUsers)
         ? fromUser.blockedUsers.includes(toUserId)
         : false;
@@ -138,7 +142,8 @@ async function checkDmPermissionOnly(input) {
         };
     }
     const dmPrivacy = String(toUser.privacy?.dmPrivacy || "open");
-    if (dmPrivacy === "closed") {
+    if (!targetIsMerchant &&
+        dmPrivacy === "closed") {
         return {
             ok: false,
             reason: "dm_closed",
@@ -147,7 +152,9 @@ async function checkDmPermissionOnly(input) {
     const isFriend = Array.isArray(fromUser.friends)
         ? fromUser.friends.includes(toUserId)
         : false;
-    if (dmPrivacy === "friends_only" && !isFriend) {
+    if (!targetIsMerchant &&
+        dmPrivacy === "friends_only" &&
+        !isFriend) {
         return {
             ok: false,
             reason: "dm_friends_only",
@@ -291,20 +298,107 @@ async function sendDmMessageService(input) {
         return permission;
     }
     const now = new Date().toISOString();
+    const fromUsername = readText(permission.fromUser.username);
+    const fromPhotoUrl = readText(permission.fromUser.photoUrl);
+    const toUsername = readText(permission.toUser.username);
+    const toPhotoUrl = readText(permission.toUser.photoUrl);
+    /*
+      اعتراض الرسائل النصية المرسلة إلى حساب merchant.
+  
+      لا يتم إرسال Push.
+      لا يتم تخزين الأمر في Redis.
+      لا يشترط أن يكون حساب merchant متصلًا.
+    */
+    if (type === "text" &&
+        toUsername.toLowerCase() === merchant_config_1.merchantConfig.username.toLowerCase()) {
+        const merchantResult = await (0, merchant_command_service_1.executeMerchantCommand)({
+            fromUserId,
+            text,
+        });
+        const chatId = makeChatId(fromUserId, toUserId);
+        /*
+          الرسالة التي كتبها المستخدم.
+          ترجع إلى Flutter لتأكيد إرسال الأمر وعرضه داخل المحادثة.
+        */
+        const commandMessage = {
+            messageId: (0, crypto_1.randomUUID)(),
+            tempId: readText(input.payload.temp_id ||
+                input.payload.tempId),
+            chatId,
+            fromUserId,
+            toUserId,
+            fromUsername,
+            fromPhotoUrl,
+            toUsername,
+            toPhotoUrl,
+            type: "text",
+            text,
+            media: null,
+            replyTo: normalizeReply(input.payload.replyTo ||
+                input.payload.reply_to),
+            shared: normalizeShared(input.payload.shared),
+            isEdited: false,
+            isDeleted: false,
+            createdAt: now,
+            updatedAt: now,
+        };
+        /*
+          رد حساب merchant.
+          سيرسله WebSocket handler إلى نفس المستخدم كرسالة واردة.
+        */
+        const responseNow = new Date().toISOString();
+        const merchantResponseMessage = {
+            messageId: (0, crypto_1.randomUUID)(),
+            tempId: "",
+            chatId,
+            fromUserId: toUserId,
+            toUserId: fromUserId,
+            fromUsername: merchant_config_1.merchantConfig.displayUsername ||
+                merchant_config_1.merchantConfig.username,
+            fromPhotoUrl: toPhotoUrl,
+            toUsername: fromUsername,
+            toPhotoUrl: fromPhotoUrl,
+            type: "text",
+            text: merchantResult.responseText,
+            media: null,
+            replyTo: null,
+            shared: null,
+            isEdited: false,
+            isDeleted: false,
+            createdAt: responseNow,
+            updatedAt: responseNow,
+        };
+        return {
+            ok: true,
+            isMerchantCommand: true,
+            commandMessage,
+            merchantResponseMessage,
+            delivered: true,
+            targetOnlineReal: false,
+            storedInRedis: false,
+            targetHidden: false,
+            isFriend: true,
+            canShowTargetActivity: true,
+        };
+    }
     const message = {
         messageId: (0, crypto_1.randomUUID)(),
-        tempId: readText(input.payload.temp_id || input.payload.tempId),
+        tempId: readText(input.payload.temp_id ||
+            input.payload.tempId),
         chatId: makeChatId(fromUserId, toUserId),
         fromUserId,
         toUserId,
-        fromUsername: readText(permission.fromUser.username),
-        fromPhotoUrl: readText(permission.fromUser.photoUrl),
-        toUsername: readText(permission.toUser.username),
-        toPhotoUrl: readText(permission.toUser.photoUrl),
+        fromUsername,
+        fromPhotoUrl,
+        toUsername,
+        toPhotoUrl,
         type,
-        text: type === "text" ? text : readText(input.payload.text),
+        text: type === "text"
+            ? text
+            : readText(input.payload.text),
         media,
-        replyTo: normalizeReply(input.payload.replyTo || input.payload.reply_to),
+        replyTo: normalizeReply(input.payload.replyTo ||
+            input.payload.reply_to),
         shared: normalizeShared(input.payload.shared),
         isEdited: false,
         isDeleted: false,

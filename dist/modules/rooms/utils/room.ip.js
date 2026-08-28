@@ -36,22 +36,24 @@ function normalizeIp(value) {
 }
 /*
   استخراج IP من socket context.
+  متوافق مع مكتبة ws (وليس Socket.IO):
+  headers → context.client.upgradeHeaders (ملتقطة من طلب الـ upgrade)
+  أو مباشرة context.client.clientIp.
 */
 function getClientIp(context) {
+    const client = context?.client;
     const socket = context?.socket;
-    const handshake = socket?.handshake || {};
-    const headers = handshake.headers || {};
-    const cfIp = clean(headers["cf-connecting-ip"]);
-    const forwardedFor = clean(headers["x-forwarded-for"])
+    const upgradeHeaders = client?.upgradeHeaders || {};
+    const clientIp = client?.clientIp || "";
+    const cfIp = clean(upgradeHeaders["cf-connecting-ip"]);
+    const forwardedFor = clean(upgradeHeaders["x-forwarded-for"])
         .split(",")
         .map((item) => clean(item))
         .filter(Boolean)[0];
-    const realIp = clean(headers["x-real-ip"]);
-    const socketIp = clean(handshake.address) ||
-        clean(socket?.conn?.remoteAddress) ||
-        clean(socket?.request?.connection?.remoteAddress) ||
-        clean(socket?.request?.socket?.remoteAddress);
-    return normalizeIp(cfIp || forwardedFor || realIp || socketIp);
+    const realIp = clean(upgradeHeaders["x-real-ip"]);
+    const remoteAddress = clean(socket?._socket?.remoteAddress) ||
+        clean(socket?._sender?._socket?.remoteAddress);
+    return normalizeIp(cfIp || forwardedFor || realIp || clientIp || remoteAddress);
 }
 /*
   فحص هل IP محظور داخل الغرفة.
@@ -96,16 +98,16 @@ function removeBannedIp(input) {
   للـ logs فقط.
 */
 function getIpDebugInfo(context) {
+    const client = context?.client;
     const socket = context?.socket;
-    const handshake = socket?.handshake || {};
-    const headers = handshake.headers || {};
+    const upgradeHeaders = client?.upgradeHeaders || {};
     return {
         ip: getClientIp(context),
-        cfConnectingIp: clean(headers["cf-connecting-ip"]),
-        xForwardedFor: clean(headers["x-forwarded-for"]),
-        xRealIp: clean(headers["x-real-ip"]),
-        handshakeAddress: clean(handshake.address),
-        remoteAddress: clean(socket?.conn?.remoteAddress),
+        cfConnectingIp: clean(upgradeHeaders["cf-connecting-ip"]),
+        xForwardedFor: clean(upgradeHeaders["x-forwarded-for"]),
+        xRealIp: clean(upgradeHeaders["x-real-ip"]),
+        clientIp: clean(client?.clientIp),
+        remoteAddress: clean(socket?._socket?.remoteAddress),
     };
 }
 //# sourceMappingURL=room.ip.js.map
