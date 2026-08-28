@@ -38,6 +38,16 @@ export type LoginPayload = {
   sdk: string;
   ver: string;
   id: string;
+
+  /*
+    معرف الجلسة الحالية المرسل من التطبيق (إن وُجد).
+  */
+  sessionId?: string;
+
+  /*
+    معلومات الجهاز الإضافية (اختياري).
+  */
+  deviceInfo?: string;
 };
 
 export type RegisterPayload = {
@@ -51,6 +61,9 @@ export type RegisterPayload = {
   sdk: string;
   ver: string;
   id: string;
+
+  sessionId?: string;
+  deviceInfo?: string;
 };
 
 export type ResumePayload = {
@@ -71,6 +84,9 @@ export type ResumePayload = {
   sdk?: string;
   ver?: string;
   id?: string;
+
+  sessionId?: string;
+  deviceInfo?: string;
 };
 
 export type LogoutPayload = {

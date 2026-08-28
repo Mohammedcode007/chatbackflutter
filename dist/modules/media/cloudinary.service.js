@@ -18,6 +18,8 @@ function folderByKind(kind) {
             return "bimo/chats/audio";
         case "gift_gif":
             return "bimo/gifs";
+        case "room_cover":
+            return "bimo/rooms/covers";
         case "chat_file":
         default:
             return "bimo/files";
@@ -29,6 +31,7 @@ function resourceTypeByKind(kind) {
         case "profile_cover":
         case "chat_image":
         case "gift_gif":
+        case "room_cover":
             return "image";
         case "chat_video":
         case "chat_audio":

@@ -796,12 +796,16 @@ const handleRoomCreate = async (context) => {
         const description = text(context.message.description);
         const password = text(context.message.password);
         const voiceEnabled = boolValue(context.message.voiceEnabled);
+        const roomImage = text(context.message.room_image || context.message.roomImage);
+        const countryCode = text(context.message.country || context.message.countryCode);
         const result = await (0, room_create_service_1.createRoomService)({
             creatorId,
             name,
             password,
             description,
             voiceEnabled,
+            roomImage,
+            countryCode,
         });
         console.log(`[${logName}] service result:`, result);
         if (!result.ok) {
@@ -1103,6 +1107,67 @@ const handleRoomList = async (context) => {
     catch (error) {
         console.error(`[${logName}] unexpected error:`, error);
         (0, ws_utils_1.sendError)(context.socket, ws_events_1.WS_EVENTS.ROOM_LIST_EVENT, "room_list_failed", context.message.request_id);
+        logEnd(logName);
+    }
+};
+const handleRoomUpdate = async (context) => {
+    const logName = "ROOM_UPDATE_HANDLER";
+    try {
+        logStart(logName, context);
+        if (!(0, ws_auth_1.requireLogin)(context, ws_events_1.WS_EVENTS.ROOM_UPDATE_EVENT)) {
+            console.log(`[${logName}] requireLogin failed`);
+            logEnd(logName);
+            return;
+        }
+        const actorId = context.client.userId;
+        const room_id = text(context.message.room_id || context.message.roomId || context.message.id);
+        const name = text(context.message.name);
+        const roomImage = text(context.message.room_image || context.message.roomImage);
+        const country = text(context.message.country);
+        if (!room_id) {
+            (0, ws_utils_1.sendError)(context.socket, ws_events_1.WS_EVENTS.ROOM_UPDATE_EVENT, "room_id_required", context.message.request_id);
+            logEnd(logName);
+            return;
+        }
+        const room = await Room_model_1.RoomModel.findOne({ roomId: room_id });
+        if (!room) {
+            (0, ws_utils_1.sendError)(context.socket, ws_events_1.WS_EVENTS.ROOM_UPDATE_EVENT, "room_not_found", context.message.request_id);
+            logEnd(logName);
+            return;
+        }
+        const isCreator = room.creatorId === actorId;
+        const isOwner = (room.owners || []).includes(actorId);
+        const isAdmin = (room.admins || []).includes(actorId);
+        if (!isCreator && !isOwner && !isAdmin) {
+            (0, ws_utils_1.sendError)(context.socket, ws_events_1.WS_EVENTS.ROOM_UPDATE_EVENT, "permission_denied", context.message.request_id);
+            logEnd(logName);
+            return;
+        }
+        const updateData = {};
+        if (name)
+            updateData.name = name;
+        if (roomImage)
+            updateData.roomImage = roomImage;
+        if (country)
+            updateData.country = country;
+        const updatedRoom = await Room_model_1.RoomModel.findOneAndUpdate({ roomId: room_id }, { $set: updateData }, { new: true });
+        (0, ws_utils_1.sendSuccess)(context.socket, {
+            handler: ws_events_1.WS_EVENTS.ROOM_UPDATE_EVENT,
+            type: "success",
+            request_id: context.message.request_id,
+            room: updatedRoom,
+        });
+        broadcastToRoomUsers(room_id, {
+            handler: ws_events_1.WS_EVENTS.ROOM_UPDATE_EVENT,
+            type: "room_updated",
+            roomId: room_id,
+            room: updatedRoom,
+        });
+        logEnd(logName);
+    }
+    catch (error) {
+        console.error(`[${logName}] unexpected error:`, error);
+        (0, ws_utils_1.sendError)(context.socket, ws_events_1.WS_EVENTS.ROOM_UPDATE_EVENT, "room_update_failed", context.message.request_id);
         logEnd(logName);
     }
 };
@@ -1971,6 +2036,7 @@ exports.roomHandlers = {
     [ws_events_1.WS_HANDLERS.ROOM_JOIN]: handleRoomJoin,
     [ws_events_1.WS_HANDLERS.ROOM_LEAVE]: handleRoomLeave,
     [ws_events_1.WS_HANDLERS.ROOM_LIST]: handleRoomList,
+    [ws_events_1.WS_HANDLERS.ROOM_UPDATE]: handleRoomUpdate,
     [ws_events_1.WS_HANDLERS.ROOM_MESSAGE_SEND]: handleRoomMessageSend,
     [ws_events_1.WS_HANDLERS.ROOM_FAVORITE_TOGGLE]: handleRoomFavoriteToggle,
     [ws_events_1.WS_HANDLERS.ROOM_BOOST]: handleRoomBoost,

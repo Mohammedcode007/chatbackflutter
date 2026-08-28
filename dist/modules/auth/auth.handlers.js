@@ -1,6 +1,10 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.authHandlers = void 0;
+const crypto_1 = __importDefault(require("crypto"));
 const ws_utils_1 = require("../../websocket/ws.utils");
 const clients_store_1 = require("../../websocket/stores/clients.store");
 const rooms_store_1 = require("../../websocket/stores/rooms.store");
@@ -8,8 +12,9 @@ const ws_events_1 = require("../../websocket/ws.events");
 const User_model_1 = require("../../models/User.model");
 const auth_validators_1 = require("./auth.validators");
 const auth_service_1 = require("./auth.service");
-const chats_delivery_1 = require("../chats/chats.delivery");
+const session_service_1 = require("./session.service");
 const dm_service_1 = require("../dm/dm.service");
+const chats_delivery_1 = require("../chats/chats.delivery");
 /*
   إرسال تحديث حالة المستخدم إلى أصدقائه.
 */
@@ -99,11 +104,12 @@ const notifyFriendsAboutAuthStatus = async (userId, changedFields = []) => {
 /*
   حفظ المستخدم على اتصال WebSocket الحالي.
 */
-const saveLoggedInClient = (context, user, session) => {
+const saveLoggedInClient = (context, user, session, sessionId) => {
     console.log("[AUTH] Save logged-in client:", {
         userId: user.userId,
         username: user.username,
         session,
+        sessionId,
     });
     (0, clients_store_1.updateClient)(context.socket, {
         mongoId: user.mongoId || String(user._id),
@@ -111,13 +117,14 @@ const saveLoggedInClient = (context, user, session) => {
         username: user.username,
         photoUrl: user.photoUrl || "",
         session,
+        sessionId,
         isLoggedIn: true,
     });
 };
 /*
   إرسال نتيجة نجاح login/register/resume إلى Flutter.
 */
-const sendAuthSuccess = (context, eventHandler, user, token, sessionExpiresAt) => {
+const sendAuthSuccess = (context, eventHandler, user, token, sessionExpiresAt, sessionId) => {
     console.log("[AUTH] Sending auth success:", {
         handler: eventHandler,
         userId: user.userId,
@@ -134,6 +141,7 @@ const sendAuthSuccess = (context, eventHandler, user, token, sessionExpiresAt) =
         current: user.current || "0",
         token,
         session_expires_at: sessionExpiresAt,
+        session_id: sessionId || "",
         user,
     });
 };
@@ -181,15 +189,22 @@ const handleRegister = async (context) => {
         (0, ws_utils_1.sendError)(socket, ws_events_1.WS_EVENTS.REGISTER_EVENT, "invalid_register_payload", message.request_id);
         return;
     }
-    const result = await (0, auth_service_1.registerService)(message);
+    const ipAddress = context.client?.clientIp || "";
+    const countryCode = (0, session_service_1.lookupCountryCode)(ipAddress);
+    const deviceInfo = (0, session_service_1.extractDeviceInfo)(context.client?.upgradeHeaders, message.deviceInfo);
+    const result = await (0, auth_service_1.registerService)(message, {
+        ipAddress,
+        countryCode,
+        deviceInfo,
+    });
     if (!result.ok) {
         console.log("[AUTH REGISTER] Failed:", result.reason);
         (0, ws_utils_1.sendError)(socket, ws_events_1.WS_EVENTS.REGISTER_EVENT, result.reason, message.request_id);
         return;
     }
     const user = result.user;
-    saveLoggedInClient(context, user, message.session);
-    sendAuthSuccess(context, ws_events_1.WS_EVENTS.REGISTER_EVENT, user, result.token, result.sessionExpiresAt);
+    saveLoggedInClient(context, user, message.session, result.sessionId);
+    sendAuthSuccess(context, ws_events_1.WS_EVENTS.REGISTER_EVENT, user, result.token, result.sessionExpiresAt, result.sessionId);
     await notifyFriendsAboutAuthStatus(user.userId, [
         "current",
         "isOnline",
@@ -214,15 +229,22 @@ const handleLogin = async (context) => {
         (0, ws_utils_1.sendError)(socket, ws_events_1.WS_EVENTS.LOGIN_EVENT, "invalid_login_payload", message.request_id);
         return;
     }
-    const result = await (0, auth_service_1.loginService)(message);
+    const ipAddress = context.client?.clientIp || "";
+    const countryCode = (0, session_service_1.lookupCountryCode)(ipAddress);
+    const deviceInfo = (0, session_service_1.extractDeviceInfo)(context.client?.upgradeHeaders, message.deviceInfo);
+    const result = await (0, auth_service_1.loginService)(message, {
+        ipAddress,
+        countryCode,
+        deviceInfo,
+    });
     if (!result.ok) {
         console.log("[AUTH LOGIN] Failed:", result.reason);
         (0, ws_utils_1.sendError)(socket, ws_events_1.WS_EVENTS.LOGIN_EVENT, result.reason, message.request_id);
         return;
     }
     const user = result.user;
-    saveLoggedInClient(context, user, message.session);
-    sendAuthSuccess(context, ws_events_1.WS_EVENTS.LOGIN_EVENT, user, result.token, result.sessionExpiresAt);
+    saveLoggedInClient(context, user, message.session, result.sessionId);
+    sendAuthSuccess(context, ws_events_1.WS_EVENTS.LOGIN_EVENT, user, result.token, result.sessionExpiresAt, result.sessionId);
     await deliverPendingDmForUser(context, user.userId);
     await notifyFriendsAboutAuthStatus(user.userId, [
         "current",
@@ -256,7 +278,14 @@ const handleResume = async (context) => {
         (0, ws_utils_1.sendError)(socket, ws_events_1.WS_EVENTS.LOGIN_EVENT, "invalid_resume_payload", message.request_id);
         return;
     }
-    const result = await (0, auth_service_1.resumeService)(message);
+    const ipAddress = context.client?.clientIp || "";
+    const countryCode = (0, session_service_1.lookupCountryCode)(ipAddress);
+    const deviceInfo = (0, session_service_1.extractDeviceInfo)(context.client?.upgradeHeaders, message.deviceInfo);
+    const result = await (0, auth_service_1.resumeService)(message, {
+        ipAddress,
+        countryCode,
+        deviceInfo,
+    });
     if (!result.ok) {
         console.log("[AUTH RESUME] Failed:", result.reason);
         /*
@@ -270,12 +299,12 @@ const handleResume = async (context) => {
     /*
       تسجيل المستخدم على السوكيت الجديد.
     */
-    saveLoggedInClient(context, user, message.session);
+    saveLoggedInClient(context, user, message.session, result.sessionId);
     /*
       نستخدم login_event حتى لا نحتاج Event جديد
       داخل Flutter.
     */
-    sendAuthSuccess(context, ws_events_1.WS_EVENTS.LOGIN_EVENT, user, result.token, result.sessionExpiresAt);
+    sendAuthSuccess(context, ws_events_1.WS_EVENTS.LOGIN_EVENT, user, result.token, result.sessionExpiresAt, result.sessionId);
     await deliverPendingDmForUser(context, user.userId);
     await notifyFriendsAboutAuthStatus(user.userId, [
         "current",
@@ -292,12 +321,15 @@ const handleResume = async (context) => {
 const handleLogout = async (context) => {
     const { socket, message } = context;
     const userId = context.client?.userId;
+    const sessionId = context.client?.sessionId;
     console.log("[AUTH LOGOUT] Request:", {
         userId,
+        sessionId,
         requestId: message.request_id,
     });
     await (0, auth_service_1.logoutService)({
         userId,
+        sessionId,
     });
     if (userId) {
         await notifyFriendsAboutAuthStatus(userId, [
@@ -313,6 +345,7 @@ const handleLogout = async (context) => {
         username: undefined,
         photoUrl: undefined,
         session: undefined,
+        sessionId: undefined,
         isLoggedIn: false,
         activeRoomId: undefined,
         activeChatId: undefined,
@@ -407,6 +440,120 @@ const handleResetPassword = async (context) => {
     });
     console.log("[AUTH RESET PASSWORD] Completed");
 };
+/*
+  جلب جلسات المستخدم النشطة عبر WebSocket.
+  Flutter يرسل:
+  {
+    handler: "sessions.list",
+    token: userAuthToken,
+    request_id: "..."
+  }
+*/
+function extractTokenFromMessage(message) {
+    const cleanToken = (value) => {
+        return String(value || "")
+            .trim()
+            .replace(/^Bearer\s+/i, "")
+            .trim();
+    };
+    return (cleanToken(message.token) ||
+        cleanToken(message.authorization) ||
+        cleanToken(message.data?.token) ||
+        cleanToken(message.data?.authorization));
+}
+function extractTokenFromHandshake(client) {
+    const headers = client?.upgradeHeaders || {};
+    const headerValue = (key) => {
+        const value = headers[key];
+        if (Array.isArray(value))
+            return value[0] || "";
+        return String(value || "");
+    };
+    return String(headerValue("authorization") || "")
+        .replace(/^Bearer\s+/i, "")
+        .trim();
+}
+const handleSessionsList = async (context) => {
+    const { socket, message } = context;
+    const token = extractTokenFromMessage(message) || extractTokenFromHandshake(context.client);
+    console.log("[AUTH SESSIONS_LIST] Request:", {
+        requestId: message.request_id,
+        hasToken: Boolean(token),
+    });
+    if (!token) {
+        (0, ws_utils_1.sendError)(socket, ws_events_1.WS_EVENTS.SESSIONS_LIST_EVENT, "token_required", message.request_id);
+        return;
+    }
+    const sessionTokenHash = crypto_1.default
+        .createHash("sha256")
+        .update(token)
+        .digest("hex");
+    const user = await User_model_1.UserModel.findOne({
+        sessionTokenHash,
+        $or: [
+            { sessionExpiresAt: null },
+            { sessionExpiresAt: { $gt: new Date() } },
+        ],
+    }).select("+sessionTokenHash +sessionExpiresAt");
+    if (!user) {
+        (0, ws_utils_1.sendError)(socket, ws_events_1.WS_EVENTS.SESSIONS_LIST_EVENT, "invalid_or_expired_token", message.request_id);
+        return;
+    }
+    const currentSessionId = String(message.sessionId || message.session_id || "").trim();
+    const sessions = await (0, session_service_1.getActiveSessions)(user.userId, currentSessionId);
+    (0, ws_utils_1.safeSend)(socket, {
+        handler: ws_events_1.WS_EVENTS.SESSIONS_LIST_EVENT,
+        type: "response",
+        status: "success",
+        request_id: message.request_id,
+        data: sessions,
+    });
+};
+/*
+  إلغاء جلسة محددة عبر WebSocket.
+  Flutter يرسل:
+  {
+    handler: "sessions.revoke",
+    token: userAuthToken,
+    session_id: "...",
+    request_id: "..."
+  }
+*/
+const handleSessionRevoke = async (context) => {
+    const { socket, message } = context;
+    const token = String(message.token || "").trim();
+    const sessionId = String(message.session_id || message.sessionId || "").trim();
+    if (!token) {
+        (0, ws_utils_1.sendError)(socket, ws_events_1.WS_EVENTS.SESSION_REVOKE_EVENT, "token_required", message.request_id);
+        return;
+    }
+    const sessionTokenHash = crypto_1.default
+        .createHash("sha256")
+        .update(token)
+        .digest("hex");
+    const user = await User_model_1.UserModel.findOne({
+        sessionTokenHash,
+        $or: [
+            { sessionExpiresAt: null },
+            { sessionExpiresAt: { $gt: new Date() } },
+        ],
+    }).select("+sessionTokenHash +sessionExpiresAt");
+    if (!user) {
+        (0, ws_utils_1.sendError)(socket, ws_events_1.WS_EVENTS.SESSION_REVOKE_EVENT, "invalid_or_expired_token", message.request_id);
+        return;
+    }
+    if (!sessionId) {
+        (0, ws_utils_1.sendError)(socket, ws_events_1.WS_EVENTS.SESSION_REVOKE_EVENT, "session_id_required", message.request_id);
+        return;
+    }
+    const revoked = await (0, session_service_1.revokeSession)(user.userId, sessionId);
+    (0, ws_utils_1.sendSuccess)(socket, {
+        handler: ws_events_1.WS_EVENTS.SESSION_REVOKE_EVENT,
+        request_id: message.request_id,
+        session_id: sessionId,
+        revoked,
+    });
+};
 exports.authHandlers = {
     /*
       Register
@@ -443,5 +590,10 @@ exports.authHandlers = {
     */
     [ws_events_1.WS_HANDLERS.AUTH_RESET_PASSWORD]: handleResetPassword,
     reset_password: handleResetPassword,
+    /*
+      Sessions
+    */
+    [ws_events_1.WS_HANDLERS.AUTH_SESSIONS_LIST]: handleSessionsList,
+    [ws_events_1.WS_HANDLERS.AUTH_SESSION_REVOKE]: handleSessionRevoke,
 };
 //# sourceMappingURL=auth.handlers.js.map

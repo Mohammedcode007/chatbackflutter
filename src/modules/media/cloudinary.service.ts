@@ -7,7 +7,8 @@ export type MediaKind =
   | "chat_video"
   | "chat_audio"
   | "chat_file"
-  | "gift_gif";
+  | "gift_gif"
+  | "room_cover";
 
 function folderByKind(kind: MediaKind) {
   switch (kind) {
@@ -29,6 +30,9 @@ function folderByKind(kind: MediaKind) {
     case "gift_gif":
       return "bimo/gifs";
 
+    case "room_cover":
+      return "bimo/rooms/covers";
+
     case "chat_file":
     default:
       return "bimo/files";
@@ -41,6 +45,7 @@ function resourceTypeByKind(kind: MediaKind): "image" | "video" | "raw" | "auto"
     case "profile_cover":
     case "chat_image":
     case "gift_gif":
+    case "room_cover":
       return "image";
 
     case "chat_video":

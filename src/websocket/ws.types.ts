@@ -37,6 +37,22 @@ export type ClientInfo = {
   photoUrl?: string;
   session?: string;
 
+  /**
+   * معرف الجلسة الذي يتعامل به Flutter.
+   */
+  sessionId?: string;
+
+  /**
+   * عنوان IP الخاص بالاتصال.
+   */
+  clientIp?: string;
+
+  /**
+   * HTTP headers from the WebSocket upgrade request.
+   * Captured once at connection time (ws v8 removes socket.request).
+   */
+  upgradeHeaders?: Record<string, string | string[] | undefined>;
+
   isLoggedIn: boolean;
   isAlive: boolean;
 

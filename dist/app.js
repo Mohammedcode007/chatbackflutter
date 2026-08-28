@@ -10,6 +10,8 @@ const path_1 = __importDefault(require("path"));
 const crypto_1 = __importDefault(require("crypto"));
 const User_model_1 = require("./models/User.model");
 const auth_service_1 = require("./modules/auth/auth.service");
+const session_service_1 = require("./modules/auth/session.service");
+const cloudinary_service_1 = require("./modules/media/cloudinary.service");
 function createApp() {
     const app = (0, express_1.default)();
     app.use((0, cors_1.default)());
@@ -103,6 +105,130 @@ function createApp() {
         }
     });
     app.use("/uploads", express_1.default.static(path_1.default.join(process.cwd(), "public/uploads")));
+    /*
+      مصادقة الطلب عبر رمز الجلسة المحفوظ في Authorization header.
+      يعيد المستخدم أو null إذا كانت الجلسة غير صالحة.
+    */
+    const authUserFromRequest = async (req) => {
+        const authHeader = req.headers.authorization || "";
+        const authToken = authHeader.replace("Bearer ", "").trim();
+        if (!authToken)
+            return null;
+        const sessionTokenHash = crypto_1.default
+            .createHash("sha256")
+            .update(authToken)
+            .digest("hex");
+        const user = await User_model_1.UserModel.findOne({
+            sessionTokenHash,
+            $or: [
+                { sessionExpiresAt: null },
+                { sessionExpiresAt: { $gt: new Date() } },
+            ],
+        }).select("+sessionTokenHash +sessionExpiresAt");
+        return user;
+    };
+    /*
+      جلب جميع الجلسات النشطة للمستخدم الحالي.
+    */
+    app.get(["/api/auth/sessions", "/chatbackflutter/api/auth/sessions"], async (req, res) => {
+        try {
+            const user = await authUserFromRequest(req);
+            if (!user) {
+                return res.status(401).json({
+                    success: false,
+                    message: "invalid_or_expired_token",
+                });
+            }
+            const currentSessionId = req.query.sessionId?.toString() || "";
+            const sessions = await (0, session_service_1.getActiveSessions)(user.userId, currentSessionId);
+            return res.json({
+                success: true,
+                userId: user.userId,
+                totalSessions: sessions.length,
+                currentSessionId,
+                sessions,
+            });
+        }
+        catch (error) {
+            console.error("[REST SESSIONS_ERROR]", error);
+            return res.status(500).json({
+                success: false,
+                message: "internal_server_error",
+            });
+        }
+    });
+    /*
+      إلغاء جلسة محددة.
+    */
+    app.post(["/api/auth/sessions/revoke", "/chatbackflutter/api/auth/sessions/revoke"], async (req, res) => {
+        try {
+            const user = await authUserFromRequest(req);
+            if (!user) {
+                return res.status(401).json({
+                    success: false,
+                    message: "invalid_or_expired_token",
+                });
+            }
+            const sessionId = String(req.body?.sessionId || "").trim();
+            if (!sessionId) {
+                return res.status(400).json({
+                    success: false,
+                    message: "sessionId_required",
+                });
+            }
+            const revoked = await (0, session_service_1.revokeSession)(user.userId, sessionId);
+            return res.json({
+                success: revoked,
+                message: revoked
+                    ? "session_revoked"
+                    : "session_not_found",
+            });
+        }
+        catch (error) {
+            console.error("[REST SESSIONS_REVOKE_ERROR]", error);
+            return res.status(500).json({
+                success: false,
+                message: "internal_server_error",
+            });
+        }
+    });
+    /*
+      إلغاء جميع الجلسات ما عدا الجلسة الحالية.
+    */
+    app.post([
+        "/api/auth/sessions/revoke-others",
+        "/chatbackflutter/api/auth/sessions/revoke-others",
+    ], async (req, res) => {
+        try {
+            const user = await authUserFromRequest(req);
+            if (!user) {
+                return res.status(401).json({
+                    success: false,
+                    message: "invalid_or_expired_token",
+                });
+            }
+            const currentSessionId = String(req.body?.sessionId || "").trim();
+            if (!currentSessionId) {
+                return res.status(400).json({
+                    success: false,
+                    message: "sessionId_required",
+                });
+            }
+            const revokedCount = await (0, session_service_1.revokeOtherSessions)(user.userId, currentSessionId);
+            return res.json({
+                success: true,
+                revokedCount,
+                message: "other_sessions_revoked",
+            });
+        }
+        catch (error) {
+            console.error("[REST SESSIONS_REVOKE_OTHERS_ERROR]", error);
+            return res.status(500).json({
+                success: false,
+                message: "internal_server_error",
+            });
+        }
+    });
     app.get("/", (_req, res) => {
         res.json({
             ok: true,
@@ -238,6 +364,64 @@ function createApp() {
     app.post(["/api/auth/forgot-password", "/chatbackflutter/api/auth/forgot-password"], forgotPasswordHandler);
     app.post(["/api/auth/verify-otp", "/chatbackflutter/api/auth/verify-otp"], verifyOtpHandler);
     app.post(["/api/auth/reset-password", "/chatbackflutter/api/auth/reset-password"], resetPasswordHandler);
+    /*
+      رفع صورة الغرفة عبر HTTP REST.
+      يرجع رابط CDN/Server الجاهز لإرساله مع room.create / room.update.
+  
+      يمكن إرسال kind اختياري:
+      - chat_image (افتراضي) لصور الشات الخاص.
+      - room_cover / room_image / room_cover_image لصور وأغلفة الغرف.
+    */
+    app.post(["/api/media/upload/room-image", "/chatbackflutter/api/media/upload/room-image"], async (req, res) => {
+        try {
+            const user = await authUserFromRequest(req);
+            if (!user) {
+                return res.status(401).json({
+                    success: false,
+                    message: "invalid_or_expired_token",
+                });
+            }
+            const base64 = String(req.body?.base64 || "").trim();
+            if (!base64 || !base64.startsWith("data:")) {
+                return res.status(400).json({
+                    success: false,
+                    message: "invalid_base64_file",
+                });
+            }
+            const requestedKind = String(req.body?.kind || "").trim().toLowerCase();
+            const isRoomCover = requestedKind === "room_cover" ||
+                requestedKind === "room_image" ||
+                requestedKind === "room_cover_image";
+            const kind = isRoomCover ? "room_cover" : "chat_image";
+            const result = await (0, cloudinary_service_1.uploadBase64ToCloudinary)({
+                base64,
+                kind,
+                userId: user.userId,
+            });
+            if (!result.ok) {
+                return res.status(400).json({
+                    success: false,
+                    message: result.reason,
+                });
+            }
+            return res.json({
+                success: true,
+                url: result.url,
+                publicId: result.publicId,
+                data: {
+                    url: result.url,
+                    publicId: result.publicId,
+                },
+            });
+        }
+        catch (error) {
+            console.error("[REST ROOM_IMAGE_UPLOAD_ERROR]", error);
+            return res.status(500).json({
+                success: false,
+                message: "internal_server_error",
+            });
+        }
+    });
     return app;
 }
 //# sourceMappingURL=app.js.map

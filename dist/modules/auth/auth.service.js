@@ -265,6 +265,7 @@ exports.resetPasswordService = resetPasswordService;
 const crypto_1 = __importDefault(require("crypto"));
 const nodemailer_1 = __importDefault(require("nodemailer"));
 const User_model_1 = require("../../models/User.model");
+const session_service_1 = require("./session.service");
 /*
   مدة صلاحية تسجيل الدخول: 30 يومًا.
 */
@@ -338,7 +339,7 @@ function getDuplicateReason(error) {
     }
     return `duplicate_${field || "unknown"}`;
 }
-async function registerService(payload) {
+async function registerService(payload, ipInfo) {
     console.log("========== REGISTER START ==========");
     const username = normalizeUsername(payload.username);
     const password = String(payload.password || "").trim();
@@ -437,6 +438,16 @@ async function registerService(payload) {
         });
         const session = await createSessionForUser(user);
         const safeUser = sanitizeUser(user);
+        const sessionId = (0, session_service_1.generateSessionId)();
+        if (ipInfo) {
+            await (0, session_service_1.createSessionRecord)({
+                userId: user.userId,
+                sessionId,
+                ipAddress: ipInfo.ipAddress,
+                countryCode: ipInfo.countryCode,
+                deviceInfo: ipInfo.deviceInfo,
+            });
+        }
         console.log("[REGISTER] User created successfully:", {
             _id: safeUser._id,
             userId: safeUser.userId,
@@ -448,6 +459,7 @@ async function registerService(payload) {
             ok: true,
             user: safeUser,
             token: session.token,
+            sessionId,
             sessionExpiresAt: session.expiresAt.toISOString(),
         };
     }
@@ -471,7 +483,7 @@ async function registerService(payload) {
         };
     }
 }
-async function loginService(payload) {
+async function loginService(payload, ipInfo) {
     console.log("========== LOGIN START ==========");
     const username = normalizeUsername(payload.username);
     const password = String(payload.password || "").trim();
@@ -535,6 +547,16 @@ async function loginService(payload) {
       createSessionForUser يقوم بالحفظ.
     */
     const session = await createSessionForUser(user);
+    const sessionId = (0, session_service_1.generateSessionId)();
+    if (ipInfo) {
+        await (0, session_service_1.createSessionRecord)({
+            userId: user.userId,
+            sessionId,
+            ipAddress: ipInfo.ipAddress,
+            countryCode: ipInfo.countryCode,
+            deviceInfo: ipInfo.deviceInfo,
+        });
+    }
     const safeUser = sanitizeUser(user);
     console.log("[LOGIN] Login success:", {
         userId: safeUser.userId,
@@ -546,6 +568,7 @@ async function loginService(payload) {
         ok: true,
         user: safeUser,
         token: session.token,
+        sessionId,
         sessionExpiresAt: session.expiresAt.toISOString(),
     };
 }
@@ -555,7 +578,7 @@ async function loginService(payload) {
   التطبيق يرسل token المحفوظ.
   نقارن hash الرمز مع الموجود في MongoDB.
 */
-async function resumeService(payload) {
+async function resumeService(payload, ipInfo) {
     console.log("========== AUTH RESUME START ==========");
     const token = String(payload.token || "").trim();
     if (!token) {
@@ -588,6 +611,16 @@ async function resumeService(payload) {
       الرمز القديم يصبح غير صالح.
     */
     const newSession = await createSessionForUser(user);
+    const sessionId = (0, session_service_1.generateSessionId)();
+    if (ipInfo) {
+        await (0, session_service_1.createSessionRecord)({
+            userId: user.userId,
+            sessionId,
+            ipAddress: ipInfo.ipAddress,
+            countryCode: ipInfo.countryCode,
+            deviceInfo: ipInfo.deviceInfo,
+        });
+    }
     const safeUser = sanitizeUser(user);
     console.log("[AUTH RESUME] Success:", {
         userId: safeUser.userId,
@@ -599,12 +632,14 @@ async function resumeService(payload) {
         ok: true,
         user: safeUser,
         token: newSession.token,
+        sessionId,
         sessionExpiresAt: newSession.expiresAt.toISOString(),
     };
 }
 async function logoutService(input) {
     console.log("[LOGOUT] logoutService called");
     const userId = input?.userId;
+    const sessionId = input?.sessionId;
     if (userId) {
         await User_model_1.UserModel.updateOne({
             userId,
@@ -621,6 +656,9 @@ async function logoutService(input) {
                 sessionExpiresAt: "",
             },
         });
+    }
+    if (sessionId) {
+        await (0, session_service_1.deleteSessionOnLogout)(userId || "", sessionId);
     }
     return {
         ok: true,

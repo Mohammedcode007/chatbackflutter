@@ -43,6 +43,7 @@ const ws_dispatcher_1 = require("./ws.dispatcher");
 const ws_utils_1 = require("./ws.utils");
 const ws_events_1 = require("./ws.events");
 const roomClients_store_1 = require("./stores/roomClients.store");
+const session_service_1 = require("../modules/auth/session.service");
 const ROOM_USERS_EVENT = "room.users";
 function clean(value) {
     return String(value || "").trim();
@@ -179,6 +180,13 @@ function cleanupSocket(socket) {
                     activeUsers,
                     activeCount,
                 });
+                broadcastToRoom(roomId, {
+                    handler: "room_event",
+                    type: "user_dc",
+                    userId: result.userId,
+                    username,
+                    message: `${username} غادر بسبب انقطاع الاتصال DC`,
+                });
             }
         }
     }
@@ -189,8 +197,10 @@ function initWebSocketServer(server) {
         server,
         path: "/ws",
     });
-    wss.on("connection", (socket) => {
-        (0, clients_store_1.addClient)(socket);
+    wss.on("connection", (socket, request) => {
+        const clientIp = (0, session_service_1.extractClientIp)(request);
+        const upgradeHeaders = (request?.headers ?? {});
+        (0, clients_store_1.addClient)(socket, clientIp || undefined, upgradeHeaders);
         const client = (0, clients_store_1.getClient)(socket);
         (0, ws_utils_1.safeSend)(socket, {
             handler: ws_events_1.WS_EVENTS.CONNECTION_EVENT,

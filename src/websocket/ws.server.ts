@@ -284,6 +284,8 @@ import {
   getRoomUsers,
 } from "./stores/roomClients.store";
 
+import { extractClientIp } from "../modules/auth/session.service";
+
 const ROOM_USERS_EVENT = "room.users";
 
 function clean(value: any) {
@@ -477,8 +479,14 @@ export function initWebSocketServer(server: HttpServer) {
     path: "/ws",
   });
 
-  wss.on("connection", (socket: WebSocket) => {
-    addClient(socket);
+  wss.on("connection", (socket: WebSocket, request) => {
+    const clientIp = extractClientIp(request);
+    const upgradeHeaders = (request?.headers ?? {}) as Record<
+      string,
+      string | string[] | undefined
+    >;
+
+    addClient(socket, clientIp || undefined, upgradeHeaders);
 
     const client = getClient(socket);
 

@@ -21,6 +21,8 @@ async function createRoomService(input) {
         const description = (0, room_sanitize_1.sanitizeRoomDescription)(input.description);
         const password = (0, room_sanitize_1.sanitizeRoomPassword)(input.password);
         const voiceEnabled = input.voiceEnabled === true;
+        const roomImage = String(input.roomImage || "").trim();
+        const countryCode = String(input.countryCode || "").trim();
         console.log("[createRoomService] sanitized values:", {
             creatorId,
             name,
@@ -28,6 +30,8 @@ async function createRoomService(input) {
             hasPassword: password.length > 0,
             passwordLength: password.length,
             voiceEnabled,
+            hasRoomImage: roomImage.length > 0,
+            countryCode,
         });
         if (!creatorId) {
             console.log("[createRoomService] failed: not_logged_in");
@@ -117,6 +121,8 @@ async function createRoomService(input) {
                 updatedAt: null,
             },
             voiceEnabled,
+            roomImage,
+            country: countryCode,
         };
         console.log("[createRoomService] creating room with payload:", {
             ...payload,

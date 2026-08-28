@@ -7,6 +7,9 @@ export const WS_HANDLERS = {
   AUTH_VERIFY_OTP: "auth.verify_otp",
   AUTH_RESET_PASSWORD: "auth.reset_password",
 
+  AUTH_SESSIONS_LIST: "sessions.list",
+  AUTH_SESSION_REVOKE: "sessions.revoke",
+
   STORE_ITEMS_LIST: "store.items.list",
   STORE_ITEM_BUY: "store.item.buy",
   STORE_ITEM_ACTIVATE: "store.item.activate",
@@ -73,6 +76,7 @@ ROOM_UNBAN: "room.unban",
   ROOM_JOIN: "room.join",
   ROOM_LEAVE: "room.leave",
   ROOM_LIST: "room.list",
+  ROOM_UPDATE: "room.update",
 
   ROOM_MESSAGE_SEND: "room.message.send",
   ROOM_MESSAGE_REACTION: "room.message.reaction",
@@ -151,6 +155,8 @@ export const WS_EVENTS = {
   FORGOT_PASSWORD_EVENT: "forgot_password_event",
   VERIFY_OTP_EVENT: "verify_otp_event",
   RESET_PASSWORD_EVENT: "reset_password_event",
+  SESSIONS_LIST_EVENT: "sessions.list",
+  SESSION_REVOKE_EVENT: "sessions.revoke",
 
   STORE_ITEMS_EVENT: "store_items_event",
   STORE_BUY_EVENT: "store_buy_event",
